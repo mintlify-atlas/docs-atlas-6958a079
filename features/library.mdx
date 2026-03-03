@@ -1,0 +1,421 @@
+---
+title: User Library
+description: Save favorite tracks and view listening history with local storage in your browser
+---
+
+## Overview
+
+Your Library stores all your liked songs and recently played tracks locally in your browser using IndexedDB. This data persists across sessions and is private to your device.
+
+## Accessing Your Library
+
+Navigate to the Library page to view:
+
+- Liked Songs collection
+- Recently Played history
+
+```jsx
+export default function LibraryPage() {
+  const [likedSongs, setLikedSongs] = useState([]);
+  const [recentPlays, setRecentPlays] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      const [liked, recent] = await Promise.all([
+        getLikedSongs(),
+        getRecentPlays(30),
+      ]);
+      setLikedSongs(liked);
+      setRecentPlays(recent);
+      setLoading(false);
+    }
+    loadData();
+  }, []);
+}
+```
+
+<Info>
+The Library page loads both liked songs and recent plays in parallel for faster performance.
+</Info>
+
+## Liked Songs
+
+Your Liked Songs collection displays all tracks you've favorited.
+
+### Liking a Track
+
+Click the heart icon in the player bar to like the currently playing track:
+
+```jsx
+const handleToggleLike = async () => {
+  if (!currentTrack) return;
+  const result = await toggleLike(currentTrack);
+  setLiked(result);
+};
+
+<IconButton onClick={handleToggleLike}>
+  {liked ? (
+    <FavoriteRounded sx={{ color: "#ec4899" }} />
+  ) : (
+    <FavoriteBorderRounded />
+  )}
+</IconButton>
+```
+
+The icon turns pink when a track is liked.
+
+### Like Status Detection
+
+The player automatically checks if the current track is liked:
+
+```jsx
+useEffect(() => {
+  if (currentTrack?.trackId) {
+    isLiked(currentTrack.trackId).then(setLiked).catch(() => {});
+  }
+}, [currentTrack?.trackId]);
+```
+
+<Note>
+Like status is checked every time a new track starts playing, ensuring the heart icon always reflects the current state.
+</Note>
+
+## Liked Songs Display
+
+The Liked Songs section features a gradient header with playback controls:
+
+```jsx
+<Box
+  sx={{
+    display: "flex",
+    alignItems: "center",
+    gap: 2,
+    p: 3,
+    borderRadius: 3,
+    background: "linear-gradient(135deg, rgba(124,58,237,0.15), rgba(6,182,212,0.1))",
+  }}
+>
+  <Box
+    sx={{
+      width: 64,
+      height: 64,
+      borderRadius: 2,
+      background: "linear-gradient(135deg, #7c3aed, #06b6d4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <FavoriteRoundedIcon sx={{ color: "#fff", fontSize: 32 }} />
+  </Box>
+  <Box sx={{ flexGrow: 1 }}>
+    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+      Liked Songs
+    </Typography>
+    <Typography variant="body2" color="text.secondary">
+      {likedSongs.length} {likedSongs.length === 1 ? "song" : "songs"}
+    </Typography>
+  </Box>
+  {likedSongs.length > 0 && (
+    <IconButton onClick={playAllLiked}>
+      <PlayArrowRoundedIcon />
+    </IconButton>
+  )}
+</Box>
+```
+
+### Playing All Liked Songs
+
+Click the play button to play all your liked songs in order:
+
+```javascript
+const playAllLiked = () => {
+  if (likedSongs.length > 0) {
+    playerActions.playTrack(likedSongs[0], likedSongs);
+  }
+};
+```
+
+This sets all liked songs as your queue and starts playing from the first track.
+
+## Recently Played
+
+The Recently Played section shows your last 30 played tracks:
+
+```jsx
+{recentPlays.length > 0 && (
+  <Box sx={{ mb: 4 }}>
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+      <HistoryRoundedIcon sx={{ color: "text.secondary" }} />
+      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+        Recently Played
+      </Typography>
+    </Box>
+    <TrackList tracks={recentPlays} />
+  </Box>
+)}
+```
+
+### Automatic Tracking
+
+Every track you play is automatically added to recent plays:
+
+```jsx
+// In Player component
+useEffect(() => {
+  if (currentTrack?.trackId) {
+    addRecentPlay(currentTrack).catch(() => {});
+  }
+}, [currentTrack?.trackId]);
+```
+
+<Info>
+Recent plays are ordered by most recent first, so your latest listening always appears at the top.
+</Info>
+
+## IndexedDB Storage
+
+Beat App uses IndexedDB for local storage (`src/lib/idb.js:7`):
+
+```javascript
+const DB_NAME = 'beat-app-db';
+const DB_VERSION = 1;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+
+      if (!db.objectStoreNames.contains('recentlyPlayed')) {
+        const store = db.createObjectStore('recentlyPlayed', { keyPath: 'trackId' });
+        store.createIndex('playedAt', 'playedAt', { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains('likedSongs')) {
+        db.createObjectStore('likedSongs', { keyPath: 'trackId' });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+```
+
+## Database Operations
+
+<Tabs>
+  <Tab title="Toggle Like">
+    ```javascript
+    export async function toggleLike(track) {
+      const db = await openDB();
+      const tx = db.transaction('likedSongs', 'readwrite');
+      const store = tx.objectStore('likedSongs');
+
+      return new Promise((resolve, reject) => {
+        const getReq = store.get(track.trackId);
+        getReq.onsuccess = () => {
+          if (getReq.result) {
+            store.delete(track.trackId);
+            tx.oncomplete = () => resolve(false); // unliked
+          } else {
+            store.put({ ...track, likedAt: Date.now() });
+            tx.oncomplete = () => resolve(true); // liked
+          }
+        };
+      });
+    }
+    ```
+  </Tab>
+
+  <Tab title="Get Liked Songs">
+    ```javascript
+    export async function getLikedSongs() {
+      const db = await openDB();
+      const tx = db.transaction('likedSongs', 'readonly');
+      const store = tx.objectStore('likedSongs');
+
+      return new Promise((resolve) => {
+        const request = store.getAll();
+        request.onsuccess = () => {
+          const songs = request.result.sort(
+            (a, b) => (b.likedAt || 0) - (a.likedAt || 0)
+          );
+          resolve(songs);
+        };
+      });
+    }
+    ```
+  </Tab>
+
+  <Tab title="Add Recent Play">
+    ```javascript
+    export async function addRecentPlay(track) {
+      const db = await openDB();
+      const tx = db.transaction('recentlyPlayed', 'readwrite');
+      const store = tx.objectStore('recentlyPlayed');
+      store.put({ ...track, playedAt: Date.now() });
+      return new Promise((resolve) => {
+        tx.oncomplete = resolve;
+      });
+    }
+    ```
+  </Tab>
+
+  <Tab title="Get Recent Plays">
+    ```javascript
+    export async function getRecentPlays(limit = 20) {
+      const db = await openDB();
+      const tx = db.transaction('recentlyPlayed', 'readonly');
+      const store = tx.objectStore('recentlyPlayed');
+
+      return new Promise((resolve) => {
+        const request = store.index('playedAt').openCursor(null, 'prev');
+        const results = [];
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (cursor && results.length < limit) {
+            results.push(cursor.value);
+            cursor.continue();
+          } else {
+            resolve(results);
+          }
+        };
+      });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Data Persistence
+
+Your library data is:
+
+- Stored locally in your browser
+- Persists across sessions
+- Not synced to any server
+- Private to your device
+- Survives browser restarts
+
+<Note>
+Clearing your browser data will delete your library. To preserve your data, avoid clearing site data for Beat App.
+</Note>
+
+## Empty States
+
+When you haven't liked any songs yet:
+
+```jsx
+{likedSongs.length === 0 && (
+  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+    Songs you like will appear here. Tap the heart icon on the player to save songs.
+  </Typography>
+)}
+```
+
+This helpful message guides new users to start building their library.
+
+## Track Metadata Storage
+
+Each stored track includes:
+
+- `trackId` - Unique identifier
+- `title` - Track name
+- `artists` - Artist information
+- `album` - Album details
+- `thumbnailUrl` - Album artwork URL
+- `duration` - Track length
+- `likedAt` or `playedAt` - Timestamp
+
+```javascript
+// Example liked song object
+{
+  trackId: "abc123",
+  title: "Song Title",
+  artists: [{ name: "Artist Name", id: "xyz" }],
+  album: { title: "Album Title", albumId: "def456" },
+  thumbnailUrl: "/path/to/image.jpg",
+  duration: { label: "3:45" },
+  likedAt: 1709482800000
+}
+```
+
+## Checking Like Status
+
+Check if a specific track is liked:
+
+```javascript
+export async function isLiked(trackId) {
+  const db = await openDB();
+  const tx = db.transaction('likedSongs', 'readonly');
+  const store = tx.objectStore('likedSongs');
+
+  return new Promise((resolve) => {
+    const request = store.get(trackId);
+    request.onsuccess = () => resolve(!!request.result);
+  });
+}
+```
+
+This returns `true` if the track is in your liked songs, `false` otherwise.
+
+## Local Playlists Support
+
+The database also includes infrastructure for local playlists (future feature):
+
+```javascript
+if (!db.objectStoreNames.contains('localPlaylists')) {
+  db.createObjectStore('localPlaylists', { 
+    keyPath: 'id', 
+    autoIncrement: true 
+  });
+}
+```
+
+Playlist operations include:
+
+- `createPlaylist(name)` - Create new playlist
+- `getLocalPlaylists()` - Get all playlists
+- `addToPlaylist(playlistId, track)` - Add track to playlist
+- `removeFromPlaylist(playlistId, trackId)` - Remove track
+- `deletePlaylist(playlistId)` - Delete playlist
+
+<Info>
+Local playlists functionality is implemented in the database layer but not yet exposed in the UI.
+</Info>
+
+## Storage Limits
+
+IndexedDB storage limits vary by browser:
+
+- Chrome: ~60% of total disk space
+- Firefox: Up to 2GB per origin
+- Safari: ~1GB with user prompt for more
+
+For typical music metadata, these limits allow for thousands of tracks.
+
+## Privacy Considerations
+
+<CardGroup cols={2}>
+  <Card title="Local Storage" icon="lock">
+    All library data stays on your device. Nothing is sent to external servers.
+  </Card>
+
+  <Card title="No Tracking" icon="shield">
+    Your listening history and preferences are private and not tracked.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Music Playback" icon="play" href="/features/music-playback">
+    Learn how to play your liked songs
+  </Card>
+  <Card title="Search" icon="search" href="/features/search">
+    Find more music to add to your library
+  </Card>
+</CardGroup>

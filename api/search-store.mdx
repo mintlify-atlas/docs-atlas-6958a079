@@ -1,0 +1,286 @@
+---
+title: searchStore
+description: Search state management for query text and active tab filtering
+---
+
+The `searchStore` manages the search interface state, including the search query text and the currently active content tab.
+
+## Store Import
+
+```javascript
+import searchStore from "../stores/searchStore.js";
+import { useStore } from "@nanostores/react";
+
+// In a React component
+function SearchBar() {
+  const { search, activeTab } = useStore(searchStore);
+  // ...
+}
+```
+
+<Note>
+  The `searchStore` is exported as a default export, unlike `playerStore` and `appStore` which use named exports.
+</Note>
+
+---
+
+## State Shape
+
+The `searchStore` is a simple map store with two properties:
+
+<ResponseField name="search" type="string" default="">
+  The current search query entered by the user. Empty string when no search is active.
+</ResponseField>
+
+<ResponseField name="activeTab" type="string" default="all">
+  The currently selected content filter tab. Determines which type of search results to display.
+  
+  **Possible values:**
+  - `"all"` - Show all result types
+  - `"tracks"` - Show only track results
+  - `"artists"` - Show only artist results
+  - `"albums"` - Show only album results
+  - `"playlists"` - Show only playlist results
+</ResponseField>
+
+---
+
+## Updating State
+
+Since `searchStore` is a Nanostores map, you can update individual properties using `setKey()`:
+
+```javascript
+import searchStore from "../stores/searchStore.js";
+
+// Update search query
+searchStore.setKey("search", "The Beatles");
+
+// Change active tab
+searchStore.setKey("activeTab", "artists");
+
+// Clear search
+searchStore.setKey("search", "");
+searchStore.setKey("activeTab", "all");
+```
+
+---
+
+## Reading State
+
+You can read the current state using the `get()` method or subscribe in React components:
+
+```javascript
+// Get current state (one-time read)
+const currentState = searchStore.get();
+console.log(currentState.search); // "The Beatles"
+console.log(currentState.activeTab); // "artists"
+
+// Subscribe to changes in React
+import { useStore } from "@nanostores/react";
+
+function SearchComponent() {
+  const { search, activeTab } = useStore(searchStore);
+  
+  return (
+    <div>
+      <p>Searching for: {search}</p>
+      <p>Filter: {activeTab}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## Usage Examples
+
+### Search Input Handler
+
+```jsx
+import searchStore from "../stores/searchStore.js";
+import { useStore } from "@nanostores/react";
+
+function SearchBar() {
+  const { search } = useStore(searchStore);
+
+  const handleSearchChange = (e) => {
+    searchStore.setKey("search", e.target.value);
+  };
+
+  return (
+    <input
+      type="text"
+      value={search}
+      onChange={handleSearchChange}
+      placeholder="Search for songs, artists, albums..."
+    />
+  );
+}
+```
+
+### Tab Filter Component
+
+```jsx
+import searchStore from "../stores/searchStore.js";
+import { useStore } from "@nanostores/react";
+
+function SearchTabs() {
+  const { activeTab } = useStore(searchStore);
+
+  const tabs = [
+    { id: "all", label: "All" },
+    { id: "tracks", label: "Tracks" },
+    { id: "artists", label: "Artists" },
+    { id: "albums", label: "Albums" },
+    { id: "playlists", label: "Playlists" },
+  ];
+
+  const handleTabChange = (tabId) => {
+    searchStore.setKey("activeTab", tabId);
+  };
+
+  return (
+    <div className="tabs">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => handleTabChange(tab.id)}
+          className={activeTab === tab.id ? "active" : ""}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+```
+
+### Search Results Component
+
+```jsx
+import searchStore from "../stores/searchStore.js";
+import { useStore } from "@nanostores/react";
+import { useState, useEffect } from "react";
+
+function SearchResults() {
+  const { search, activeTab } = useStore(searchStore);
+  const [results, setResults] = useState(null);
+
+  useEffect(() => {
+    // Fetch search results when search or activeTab changes
+    if (search.trim()) {
+      fetchSearchResults(search, activeTab).then(setResults);
+    } else {
+      setResults(null);
+    }
+  }, [search, activeTab]);
+
+  if (!search.trim()) {
+    return <p>Enter a search query to see results</p>;
+  }
+
+  if (!results) {
+    return <p>Loading...</p>;
+  }
+
+  return (
+    <div>
+      {activeTab === "all" && (
+        <>
+          <TrackResults tracks={results.tracks} />
+          <ArtistResults artists={results.artists} />
+          <AlbumResults albums={results.albums} />
+        </>
+      )}
+      {activeTab === "tracks" && <TrackResults tracks={results.tracks} />}
+      {activeTab === "artists" && <ArtistResults artists={results.artists} />}
+      {activeTab === "albums" && <AlbumResults albums={results.albums} />}
+    </div>
+  );
+}
+```
+
+### Debounced Search
+
+```jsx
+import searchStore from "../stores/searchStore.js";
+import { useStore } from "@nanostores/react";
+import { useState, useEffect } from "react";
+
+function DebouncedSearchBar() {
+  const { search } = useStore(searchStore);
+  const [inputValue, setInputValue] = useState(search);
+
+  // Debounce the search store update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchStore.setKey("search", inputValue);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [inputValue]);
+
+  return (
+    <input
+      type="text"
+      value={inputValue}
+      onChange={(e) => setInputValue(e.target.value)}
+      placeholder="Search..."
+    />
+  );
+}
+```
+
+---
+
+## Complete Example
+
+```jsx
+import searchStore from "../stores/searchStore.js";
+import { useStore } from "@nanostores/react";
+
+function SearchInterface() {
+  const { search, activeTab } = useStore(searchStore);
+
+  const handleClearSearch = () => {
+    searchStore.setKey("search", "");
+    searchStore.setKey("activeTab", "all");
+  };
+
+  return (
+    <div className="search-interface">
+      <div className="search-header">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => searchStore.setKey("search", e.target.value)}
+          placeholder="Search for music..."
+        />
+        {search && (
+          <button onClick={handleClearSearch}>Clear</button>
+        )}
+      </div>
+
+      <div className="search-tabs">
+        {["all", "tracks", "artists", "albums", "playlists"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => searchStore.setKey("activeTab", tab)}
+            className={activeTab === tab ? "active" : ""}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <div className="search-results">
+        {search ? (
+          <p>Showing {activeTab} results for "{search}"</p>
+        ) : (
+          <p>Start typing to search...</p>
+        )}
+      </div>
+    </div>
+  );
+}
+```

@@ -1,0 +1,348 @@
+---
+title: Media Session API Integration
+description: Control playback from system media controls, lock screen, and hardware media keys
+---
+
+## Overview
+
+Beat App integrates with the browser's Media Session API, allowing you to control playback from:
+
+- Operating system media controls
+- Hardware media keys (keyboard, headphones)
+- Lock screen controls (mobile devices)
+- Notification center widgets
+- Browser toolbar media buttons
+
+<Info>
+Media Session API support varies by browser. Works best in Chrome, Edge, and Safari on desktop and mobile.
+</Info>
+
+## Metadata Display
+
+When a track plays, Beat App sends metadata to the system for display in media controls:
+
+```javascript
+const updateMediaSessionMetadata = (track) => {
+  if ("mediaSession" in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.artists?.[0]?.name || "",
+      album: track.album?.name || "",
+      artwork: track.thumbnailUrl
+        ? [
+            {
+              src: `${PROXY_URL}${track.thumbnailUrl}`,
+              sizes: "512x512",
+              type: "image/jpeg",
+            },
+          ]
+        : [],
+    });
+  }
+};
+```
+
+This displays:
+
+- Track title
+- Artist name
+- Album name
+- Album artwork (512x512px)
+
+<Note>
+Metadata is automatically updated whenever you play a new track via `playerActions.playTrack()`, `playNext()`, or `playPrevious()`.
+</Note>
+
+## Playback State
+
+The Media Session API receives real-time playback state updates:
+
+<Tabs>
+  <Tab title="Playing State">
+    ```javascript
+    audioEl.onplay = () => {
+      playerStore.setKey("isPlaying", true);
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.playbackState = "playing";
+      }
+    };
+    ```
+  </Tab>
+
+  <Tab title="Paused State">
+    ```javascript
+    audioEl.onpause = () => {
+      playerStore.setKey("isPlaying", false);
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.playbackState = "paused";
+      }
+    };
+    ```
+  </Tab>
+</Tabs>
+
+This ensures system controls show the correct play/pause state.
+
+## Position State
+
+Beat App reports playback position for accurate progress display in system controls:
+
+```javascript
+audioEl.onloadedmetadata = () => {
+  playerStore.setKey("duration", audioEl.duration);
+  if ("mediaSession" in navigator && !isNaN(audioEl.duration) && audioEl.duration !== Infinity) {
+    navigator.mediaSession.setPositionState({
+      duration: audioEl.duration,
+      playbackRate: audioEl.playbackRate,
+      position: audioEl.currentTime,
+    });
+  }
+};
+```
+
+### Seeking Updates
+
+Position state is also updated when seeking:
+
+```javascript
+seekTo: (time) => {
+  if (!isNaN(time) && isFinite(time)) {
+    audioEl.currentTime = time;
+    playerStore.setKey("currentTime", time);
+    if ("mediaSession" in navigator && !isNaN(audioEl.duration) && audioEl.duration !== Infinity) {
+      navigator.mediaSession.setPositionState({
+        duration: audioEl.duration,
+        playbackRate: audioEl.playbackRate,
+        position: audioEl.currentTime,
+      });
+    }
+  }
+}
+```
+
+<Info>
+Position state is only set when duration is a valid number (not NaN or Infinity) to avoid browser errors.
+</Info>
+
+## Action Handlers
+
+Beat App registers handlers for media control actions (`src/stores/playerStore.js:209`):
+
+<Steps>
+  <Step title="Play/Pause">
+    Handle play and pause button presses:
+    
+    ```javascript
+    navigator.mediaSession.setActionHandler("play", () => playerActions.togglePause());
+    navigator.mediaSession.setActionHandler("pause", () => playerActions.togglePause());
+    ```
+  </Step>
+
+  <Step title="Track Navigation">
+    Handle previous and next track buttons:
+    
+    ```javascript
+    navigator.mediaSession.setActionHandler("previoustrack", () => playerActions.playPrevious());
+    navigator.mediaSession.setActionHandler("nexttrack", () => playerActions.playNext());
+    ```
+  </Step>
+
+  <Step title="Seeking">
+    Handle seek bar interactions:
+    
+    ```javascript
+    navigator.mediaSession.setActionHandler("seekto", (details) => {
+      if (details.fastSeek && "fastSeek" in audioEl) {
+        audioEl.fastSeek(details.seekTime);
+        return;
+      }
+      playerActions.seekTo(details.seekTime);
+    });
+    ```
+  </Step>
+</Steps>
+
+## Fast Seek Support
+
+When available, Beat App uses the browser's fast seek capability for smoother scrubbing:
+
+```javascript
+if (details.fastSeek && "fastSeek" in audioEl) {
+  audioEl.fastSeek(details.seekTime);
+  return;
+}
+playerActions.seekTo(details.seekTime);
+```
+
+<Note>
+`fastSeek()` allows quicker seeking by approximating the target position instead of loading precise frame data.
+</Note>
+
+## Automatic Updates
+
+Media metadata updates automatically when tracks change:
+
+<Tabs>
+  <Tab title="Playing Track">
+    ```javascript
+    playTrack: async (track, newQueue = null) => {
+      playerStore.setKey("currentTrack", track);
+      audioEl.pause();
+      updateMediaSessionMetadata(track); // Auto-update
+      const audioUrl = await getAudioUrl(track.trackId);
+      audioEl.src = audioUrl;
+      audioEl.play();
+    }
+    ```
+  </Tab>
+
+  <Tab title="Next Track">
+    ```javascript
+    playNext: async () => {
+      const nextTrack = state.queue[nextIndex];
+      playerStore.setKey("currentTrack", nextTrack);
+      audioEl.pause();
+      updateMediaSessionMetadata(nextTrack); // Auto-update
+      const audioUrl = await getAudioUrl(nextTrack.trackId);
+      audioEl.src = audioUrl;
+      audioEl.play();
+    }
+    ```
+  </Tab>
+
+  <Tab title="Previous Track">
+    ```javascript
+    playPrevious: async () => {
+      const prevTrack = state.queue[prevIndex];
+      playerStore.setKey("currentTrack", prevTrack);
+      audioEl.pause();
+      updateMediaSessionMetadata(prevTrack); // Auto-update
+      const audioUrl = await getAudioUrl(prevTrack.trackId);
+      audioEl.src = audioUrl;
+      audioEl.play();
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Browser Compatibility
+
+All Media Session features are wrapped in feature detection:
+
+```javascript
+if ("mediaSession" in navigator) {
+  // Media Session API is available
+  navigator.mediaSession.metadata = new MediaMetadata({...});
+  navigator.mediaSession.setActionHandler("play", handler);
+}
+```
+
+This ensures Beat App works gracefully in browsers without Media Session support.
+
+## Supported Media Controls
+
+<CardGroup cols={2}>
+  <Card title="Desktop" icon="desktop">
+    - Keyboard media keys (Play, Pause, Next, Previous)
+    - Browser toolbar controls
+    - System media overlay (Windows, macOS)
+    - Touch Bar controls (MacBook Pro)
+  </Card>
+
+  <Card title="Mobile" icon="mobile">
+    - Lock screen controls
+    - Notification shade widgets
+    - Bluetooth headphone buttons
+    - Car audio system controls
+  </Card>
+</CardGroup>
+
+## Implementation Details
+
+Media Session setup happens when the player store mounts:
+
+```javascript
+onMount(playerStore, () => {
+  // Audio event listeners
+  audioEl.onplay = () => { /* ... */ };
+  audioEl.onpause = () => { /* ... */ };
+  audioEl.onloadedmetadata = () => { /* ... */ };
+  
+  // Register Media Session handlers
+  if ("mediaSession" in navigator) {
+    navigator.mediaSession.setActionHandler("play", () => playerActions.togglePause());
+    navigator.mediaSession.setActionHandler("pause", () => playerActions.togglePause());
+    navigator.mediaSession.setActionHandler("previoustrack", () => playerActions.playPrevious());
+    navigator.mediaSession.setActionHandler("nexttrack", () => playerActions.playNext());
+    navigator.mediaSession.setActionHandler("seekto", (details) => {
+      playerActions.seekTo(details.seekTime);
+    });
+  }
+});
+```
+
+<Info>
+Action handlers are registered once when the app loads and remain active throughout the session.
+</Info>
+
+## Testing Media Controls
+
+<Steps>
+  <Step title="Desktop Testing">
+    1. Play a track in Beat App
+    2. Minimize or switch tabs
+    3. Use keyboard media keys or browser controls
+    4. Verify playback responds correctly
+  </Step>
+
+  <Step title="Mobile Testing">
+    1. Play a track on mobile device
+    2. Lock screen or switch apps
+    3. Access media controls from lock screen/notification
+    4. Test play, pause, next, and previous buttons
+  </Step>
+
+  <Step title="Metadata Verification">
+    Check that system controls display:
+    - Correct track title
+    - Artist name
+    - Album artwork
+    - Accurate playback position
+  </Step>
+</Steps>
+
+## Common Use Cases
+
+<Tabs>
+  <Tab title="Background Listening">
+    Listen to music while using other apps. Media controls remain accessible from:
+    - System notification area
+    - Lock screen
+    - External devices
+  </Tab>
+
+  <Tab title="Multitasking">
+    Control playback without switching back to the browser:
+    - Use keyboard shortcuts
+    - Click browser toolbar controls
+    - Use hardware buttons on headphones
+  </Tab>
+
+  <Tab title="Driving">
+    Safely control music while driving via:
+    - Car audio system controls
+    - Steering wheel buttons
+    - Voice commands (where supported)
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Music Playback" icon="play" href="/features/music-playback">
+    Learn about in-app player controls
+  </Card>
+  <Card title="Queue Management" icon="list" href="/features/queue-management">
+    Manage your playback queue
+  </Card>
+</CardGroup>

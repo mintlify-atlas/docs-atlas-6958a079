@@ -1,0 +1,614 @@
+---
+title: 'YouTube API Service'
+description: 'Complete reference for music metadata and search operations'
+---
+
+## Overview
+
+The YouTube API service (`src/services/youtube-api.js`) provides comprehensive access to music metadata, search functionality, and content discovery. All functions are exported for use throughout the application.
+
+**Base URL**: `${YOUTUBE_API}` (resolves to `${API_URL}/api/youtube`)
+
+**Authentication**: All requests include Bearer token in headers
+
+```javascript
+const HEADERS = { Authorization: `Bearer ${import.meta.env.VITE_YOUTUBE_API_TOKEN}` };
+```
+
+## Search Functions
+
+### searchTracks
+
+Search for music tracks with optional pagination.
+
+<ParamField path="query" type="string" required>
+  Search query string
+</ParamField>
+
+**Returns**: `Promise<{ tracks: Track[], continuation: string | undefined }>`
+
+<CodeGroup>
+```javascript Function Call
+import { searchTracks } from '@/services/youtube-api';
+
+const result = await searchTracks('bohemian rhapsody');
+console.log(result.tracks); // Array of track objects
+console.log(result.continuation); // Token for next page
+```
+
+```javascript Implementation
+export async function searchTracks(query) {
+  try {
+    const res = await axios.get(`${YOUTUBE_API}/search`, { 
+      params: { q: query, filter: 'SONG' }, 
+      headers: HEADERS 
+    });
+    return { 
+      tracks: (res.data.data?.items || []).map(mapSong), 
+      continuation: res.data.data?.continuation 
+    };
+  } catch (e) { 
+    return { tracks: [] }; 
+  }
+}
+```
+</CodeGroup>
+
+**Endpoint**: `GET ${YOUTUBE_API}/search?q={query}&filter=SONG`
+
+<ResponseField name="tracks" type="Track[]">
+  Array of track objects with normalized structure
+</ResponseField>
+<ResponseField name="continuation" type="string">
+  Pagination token for loading more results
+</ResponseField>
+
+---
+
+### searchTracksContinuations
+
+Load additional tracks from a previous search.
+
+<ParamField path="continuation" type="string" required>
+  Continuation token from previous search response
+</ParamField>
+
+**Returns**: `Promise<{ tracks: Track[], continuation: string | undefined }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/search/continuation?token={continuation}`
+
+**Source**: `src/services/youtube-api.js:47`
+
+---
+
+### searchAlbums
+
+Search for music albums.
+
+<ParamField path="query" type="string" required>
+  Search query string
+</ParamField>
+
+**Returns**: `Promise<{ albums: Album[], continuation: string | undefined }>`
+
+<CodeGroup>
+```javascript Usage
+const result = await searchAlbums('dark side of the moon');
+console.log(result.albums);
+```
+
+```json Response Example
+{
+  "albums": [
+    {
+      "albumId": "MPREb_XXX",
+      "title": "The Dark Side of the Moon",
+      "year": "1973",
+      "isExplicit": false,
+      "artist": {
+        "name": "Pink Floyd"
+      },
+      "thumbnailUrl": "https://..."
+    }
+  ],
+  "continuation": "4qmFsgJA..."
+}
+```
+</CodeGroup>
+
+**Endpoint**: `GET ${YOUTUBE_API}/search?q={query}&filter=ALBUM`
+
+**Source**: `src/services/youtube-api.js:54`
+
+---
+
+### searchAlbumsContinuations
+
+Load additional albums from a previous search.
+
+<ParamField path="continuation" type="string" required>
+  Continuation token from previous search response
+</ParamField>
+
+**Returns**: `Promise<{ albums: Album[], continuation: string | undefined }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/search/continuation?token={continuation}`
+
+**Source**: `src/services/youtube-api.js:61`
+
+---
+
+### searchArtists
+
+Search for music artists.
+
+<ParamField path="query" type="string" required>
+  Search query string
+</ParamField>
+
+**Returns**: `Promise<{ artists: Artist[], continuation: string | undefined }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/search?q={query}&filter=ARTIST`
+
+<ResponseField name="artists" type="Artist[]">
+  Array of artist objects with artistId, name, subscribers, and thumbnailUrl
+</ResponseField>
+
+**Source**: `src/services/youtube-api.js:68`
+
+---
+
+### searchArtistsContinuations
+
+Load additional artists from a previous search.
+
+<ParamField path="continuation" type="string" required>
+  Continuation token from previous search response
+</ParamField>
+
+**Returns**: `Promise<{ artists: Artist[], continuation: string | undefined }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/search/continuation?token={continuation}`
+
+**Source**: `src/services/youtube-api.js:75`
+
+---
+
+### searchPlaylists
+
+Search for community playlists.
+
+<ParamField path="query" type="string" required>
+  Search query string
+</ParamField>
+
+**Returns**: `Promise<{ playlists: Playlist[], continuation: string | undefined }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/search?q={query}&filter=COMMUNITY_PLAYLIST`
+
+<ResponseField name="playlists" type="Playlist[]">
+  Array of playlist objects with playlistId, title, itemCount, author, and thumbnailUrl
+</ResponseField>
+
+**Source**: `src/services/youtube-api.js:82`
+
+---
+
+### searchPlaylistsContinuations
+
+Load additional playlists from a previous search.
+
+<ParamField path="continuation" type="string" required>
+  Continuation token from previous search response
+</ParamField>
+
+**Returns**: `Promise<{ playlists: Playlist[], continuation: string | undefined }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/search/continuation?token={continuation}`
+
+**Source**: `src/services/youtube-api.js:89`
+
+---
+
+## Content Retrieval Functions
+
+### getPlaylistTracks
+
+Retrieve all tracks from a specific playlist.
+
+<ParamField path="playlistId" type="string" required>
+  Unique playlist identifier
+</ParamField>
+
+**Returns**: `Promise<{ tracks: Track[], continuation: string | undefined }>`
+
+<CodeGroup>
+```javascript Usage
+const result = await getPlaylistTracks('RDCLAK5uy_XXX');
+console.log(result.tracks);
+```
+
+```javascript Response
+{
+  tracks: [
+    {
+      trackId: 'dQw4w9WgXcQ',
+      title: 'Never Gonna Give You Up',
+      artists: [{ name: 'Rick Astley' }],
+      album: { title: 'Whenever You Need Somebody', albumId: 'MPREb_XXX' },
+      thumbnailUrl: 'https://...',
+      duration: { label: '3:33' },
+      isExplicit: false
+    }
+  ],
+  continuation: '4qmFsgJA...'
+}
+```
+</CodeGroup>
+
+**Endpoint**: `GET ${YOUTUBE_API}/playlist/{playlistId}`
+
+**Source**: `src/services/youtube-api.js:96`
+
+---
+
+### getPlaylistTracksContinuations
+
+Load additional tracks from a playlist.
+
+<ParamField path="continuation" type="string" required>
+  Continuation token from previous response
+</ParamField>
+<ParamField path="visitorData" type="string">
+  Visitor data for session tracking (currently unused in implementation)
+</ParamField>
+
+**Returns**: `Promise<{ tracks: Track[], continuation: string | undefined }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/playlist/continuation?token={continuation}`
+
+**Source**: `src/services/youtube-api.js:103`
+
+---
+
+### getArtistAlbums
+
+Retrieve all albums for a specific artist.
+
+<ParamField path="artistId" type="string" required>
+  Unique artist browse identifier
+</ParamField>
+
+**Returns**: `Promise<{ albums: Album[], continuation: string | null, vd: string | null }>`
+
+<ResponseField name="albums" type="Album[]">
+  Array of album objects
+</ResponseField>
+<ResponseField name="continuation" type="string | null">
+  Token for loading more albums
+</ResponseField>
+<ResponseField name="vd" type="string | null">
+  Visitor data for continuation requests
+</ResponseField>
+
+**Endpoint**: `GET ${YOUTUBE_API}/artist/{artistId}/albums`
+
+**Source**: `src/services/youtube-api.js:110`
+
+---
+
+### getArtistAlbumsContinuations
+
+Load additional albums for an artist.
+
+<ParamField path="continuation" type="string" required>
+  Continuation token from previous response
+</ParamField>
+<ParamField path="visitorData" type="string" required>
+  Visitor data from previous response
+</ParamField>
+
+**Returns**: `Promise<{ albums: Album[], continuation: string | null, vd: string | null }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/artist/albums/continuation?token={continuation}&visitorData={visitorData}`
+
+**Source**: `src/services/youtube-api.js:119`
+
+---
+
+### getAlbum
+
+Retrieve complete album details including all tracks.
+
+<ParamField path="albumId" type="string" required>
+  Unique album browse identifier
+</ParamField>
+
+**Returns**: `Promise<{ albumId: string, title: string, artist: object, thumbnailUrl: string, tracks: Track[] }>`
+
+<CodeGroup>
+```javascript Usage
+const album = await getAlbum('MPREb_C9RghldZXj9');
+console.log(album.title);
+console.log(album.tracks);
+```
+
+```json Response Example
+{
+  "albumId": "MPREb_C9RghldZXj9",
+  "title": "Abbey Road",
+  "artist": {
+    "name": "The Beatles"
+  },
+  "thumbnailUrl": "https://...",
+  "tracks": [
+    {
+      "trackId": "XXX",
+      "title": "Come Together",
+      "artists": [{"name": "The Beatles"}],
+      "album": {
+        "title": "Abbey Road",
+        "albumId": "MPREb_C9RghldZXj9"
+      },
+      "thumbnailUrl": "https://...",
+      "duration": {"label": "4:20"},
+      "isExplicit": false
+    }
+  ]
+}
+```
+</CodeGroup>
+
+**Endpoint**: `GET ${YOUTUBE_API}/album/{albumId}`
+
+**Source**: `src/services/youtube-api.js:127`
+
+---
+
+### getArtist
+
+Retrieve comprehensive artist profile information.
+
+<ParamField path="artistId" type="string" required>
+  Unique artist browse identifier
+</ParamField>
+
+**Returns**: `Promise<{ artistId: string, name: string, description: string, thumbnailUrl: string, subscribers: string, albums: [], singles: [], tracksPlaylistId: string | null }>`
+
+<ResponseField name="artistId" type="string">
+  Artist identifier
+</ResponseField>
+<ResponseField name="name" type="string">
+  Artist name
+</ResponseField>
+<ResponseField name="description" type="string">
+  Artist biography/description
+</ResponseField>
+<ResponseField name="thumbnailUrl" type="string">
+  Artist profile image URL
+</ResponseField>
+<ResponseField name="subscribers" type="string">
+  Subscriber count text (e.g., "1.2M subscribers")
+</ResponseField>
+<ResponseField name="albums" type="array" default={[]}>
+  Albums array (populated separately via getArtistAlbums)
+</ResponseField>
+<ResponseField name="singles" type="array" default={[]}>
+  Singles array (populated separately)
+</ResponseField>
+<ResponseField name="tracksPlaylistId" type="string | null">
+  Playlist ID containing artist's top songs/videos. Extracted from sections with titles 'Songs', 'Top songs', or 'Videos'. The 'VL' prefix is removed.
+</ResponseField>
+
+**Endpoint**: `GET ${YOUTUBE_API}/artist/{artistId}`
+
+**Source**: `src/services/youtube-api.js:142`
+
+---
+
+## Discovery Functions
+
+### getSuggestions
+
+Get autocomplete suggestions for search queries.
+
+<ParamField path="query" type="string" required>
+  Partial search query
+</ParamField>
+
+**Returns**: `Promise<string[]>`
+
+<CodeGroup>
+```javascript Usage
+const suggestions = await getSuggestions('beatl');
+console.log(suggestions);
+// ['beatles', 'beatles songs', 'beatles abbey road', ...]
+```
+
+```javascript Implementation
+export async function getSuggestions(query) {
+  try {
+    const res = await axios.get(`${YOUTUBE_API}/search/suggestions`, { 
+      params: { q: query }, 
+      headers: HEADERS 
+    });
+    return res.data.data?.queries || [];
+  } catch (e) { 
+    return []; 
+  }
+}
+```
+</CodeGroup>
+
+**Endpoint**: `GET ${YOUTUBE_API}/search/suggestions?q={query}`
+
+**Source**: `src/services/youtube-api.js:168`
+
+---
+
+### getRankingsFromCountry
+
+Retrieve regional music rankings (currently not implemented).
+
+<ParamField path="countryCode" type="string" required>
+  ISO country code (e.g., 'US', 'GB')
+</ParamField>
+
+**Returns**: `Promise<{ tracks: [] }>`
+
+**Note**: This function currently returns empty results. Implementation pending.
+
+**Source**: `src/services/youtube-api.js:164`
+
+---
+
+## Home & Discovery API
+
+Additional discovery functions are available in `src/services/home-api.js`:
+
+### getHome
+
+Retrieve personalized home feed with mixed content sections.
+
+<ParamField path="continuation" type="string | null" default={null}>
+  Optional continuation token for loading more sections
+</ParamField>
+
+**Returns**: `Promise<{ sections: Section[] }>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/home?continuation={continuation}`
+
+**Source**: `src/services/home-api.js:10`
+
+---
+
+### getExplore
+
+Retrieve explore page categories and featured content.
+
+**Returns**: `Promise<object>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/explore`
+
+**Source**: `src/services/home-api.js:26`
+
+---
+
+### getNewReleases
+
+Retrieve latest album releases.
+
+**Returns**: `Promise<Album[]>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/new-releases`
+
+**Source**: `src/services/home-api.js:40`
+
+---
+
+### getCharts
+
+Retrieve chart data including trending tracks, top artists, and albums.
+
+<ParamField path="continuation" type="string | null" default={null}>
+  Optional continuation token
+</ParamField>
+
+**Returns**: `Promise<object>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/charts?continuation={continuation}`
+
+**Source**: `src/services/home-api.js:54`
+
+---
+
+### getMoodAndGenres
+
+Retrieve mood and genre categories for browsing.
+
+**Returns**: `Promise<array>`
+
+**Endpoint**: `GET ${YOUTUBE_API}/mood-and-genres`
+
+**Source**: `src/services/home-api.js:70`
+
+---
+
+## Data Transformation
+
+The service includes internal mapper functions that normalize API responses:
+
+<Expandable title="mapSong (Track Mapper)">
+```javascript
+const mapSong = (item) => ({
+  trackId: item.videoId || item.id || item.browseId,
+  title: item.title,
+  artists: item.artists || [],
+  album: item.album 
+    ? { title: item.album.name, albumId: item.album.id || item.album.browseId } 
+    : null,
+  thumbnailUrl: item.thumbnail,
+  duration: { label: item.duration || "0:00" },
+  isExplicit: item.explicit || false
+});
+```
+Transforms raw YouTube Music track data into standardized Track objects.
+</Expandable>
+
+<Expandable title="mapAlbum (Album Mapper)">
+```javascript
+const mapAlbum = (item) => ({
+  albumId: item.browseId || item.id,
+  title: item.title,
+  year: item.year || '',
+  isExplicit: item.explicit || false,
+  artist: item.artists?.[0] || { name: 'Unknown Artist' },
+  thumbnailUrl: item.thumbnail
+});
+```
+Transforms raw album data into standardized Album objects.
+</Expandable>
+
+<Expandable title="mapArtist (Artist Mapper)">
+```javascript
+const mapArtist = (item) => ({
+  artistId: item.browseId || item.id,
+  name: item.title || item.name || '',
+  subscribers: item.subscribers || '',
+  thumbnailUrl: item.thumbnail
+});
+```
+Transforms raw artist data into standardized Artist objects.
+</Expandable>
+
+<Expandable title="mapPlaylist (Playlist Mapper)">
+```javascript
+const mapPlaylist = (item) => ({
+  playlistId: item.browseId || item.id,
+  title: item.title,
+  itemCount: item.songCountText || '',
+  author: item.author ? [item.author] : [],
+  thumbnailUrl: item.thumbnail
+});
+```
+Transforms raw playlist data into standardized Playlist objects.
+</Expandable>
+
+## Error Handling
+
+All functions implement consistent error handling:
+
+- Network errors return empty results (arrays or objects)
+- No exceptions propagated to calling code
+- Console logging in development mode
+- Graceful degradation ensures UI stability
+
+```javascript
+try {
+  const res = await axios.get(endpoint, { headers: HEADERS });
+  return res.data.data || defaultValue;
+} catch (e) {
+  console.error('Error:', e);
+  return defaultValue;
+}
+```

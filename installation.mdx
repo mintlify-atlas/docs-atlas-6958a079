@@ -1,0 +1,421 @@
+---
+title: Installation
+description: Complete installation guide for Beat App including development setup, production builds, and Docker deployment
+---
+
+# Installation Guide
+
+This guide covers everything you need to install and run Beat App, from local development to production deployment.
+
+## Prerequisites
+
+Before installing Beat App, ensure you have the following installed:
+
+- **Node.js**: Version 18 or higher (v22 recommended for Docker builds)
+- **Package Manager**: npm, yarn, or pnpm
+- **Git**: For cloning the repository
+- **Docker** (optional): For containerized deployment
+
+<Note>
+  Check your Node.js version with `node --version`. If you need to upgrade, visit [nodejs.org](https://nodejs.org/).
+</Note>
+
+## Local Development Setup
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Beat App repository from GitHub:
+
+    ```bash
+    git clone https://github.com/yourusername/beat-app.git
+    cd beat-app
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all required dependencies using your preferred package manager:
+
+    <CodeGroup>
+      ```bash npm
+      npm install
+      ```
+
+      ```bash yarn
+      yarn install
+      ```
+
+      ```bash pnpm
+      pnpm install
+      ```
+    </CodeGroup>
+
+    This will install:
+    - **React 18.2.0** - Core UI framework
+    - **Vite 7.3.1** - Build tool and dev server
+    - **Material-UI 7.3.8** - UI component library
+    - **Nanostores** - State management
+    - **Axios** - HTTP client
+    - **React Router DOM** - Routing
+  </Step>
+
+  <Step title="Environment configuration">
+    Copy the example environment file:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Update the `.env` file with your configuration:
+
+    ```bash
+    # API Backend URL
+    VITE_API_URL=http://localhost:3000
+
+    # YouTube Music API Token
+    VITE_YOUTUBE_API_TOKEN=your_token_here
+    ```
+
+    <Info>
+      Environment variables prefixed with `VITE_` are exposed to the client-side code. Keep your API tokens secure.
+    </Info>
+  </Step>
+
+  <Step title="Start development server">
+    Launch the Vite development server with hot module replacement:
+
+    <CodeGroup>
+      ```bash npm
+      npm run dev
+      ```
+
+      ```bash yarn
+      yarn dev
+      ```
+
+      ```bash pnpm
+      pnpm dev
+      ```
+    </CodeGroup>
+
+    The development server will start at `http://localhost:5173`.
+  </Step>
+</Steps>
+
+## Production Build
+
+Build Beat App for production deployment:
+
+<Steps>
+  <Step title="Create production build">
+    Generate optimized production assets:
+
+    <CodeGroup>
+      ```bash npm
+      npm run build
+      ```
+
+      ```bash yarn
+      yarn build
+      ```
+
+      ```bash pnpm
+      pnpm build
+      ```
+    </CodeGroup>
+
+    This creates a `dist/` directory with:
+    - Minified JavaScript bundles
+    - Optimized CSS
+    - Compressed assets
+    - Source maps (optional)
+  </Step>
+
+  <Step title="Preview production build">
+    Test the production build locally:
+
+    <CodeGroup>
+      ```bash npm
+      npm run preview
+      ```
+
+      ```bash yarn
+      yarn preview
+      ```
+
+      ```bash pnpm
+      pnpm preview
+      ```
+    </CodeGroup>
+
+    The preview server runs at `http://localhost:4173`.
+  </Step>
+</Steps>
+
+## Docker Deployment
+
+Beat App includes a complete Docker setup for production deployment with NGINX.
+
+### Docker Configuration
+
+The included `Dockerfile` uses a multi-stage build:
+
+```dockerfile
+# Stage 1: Build
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+RUN npm ci
+
+# Build the app
+COPY . .
+RUN npm run build
+
+# Stage 2: Serve
+FROM nginx:stable-alpine AS runner
+
+# Copy custom nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built assets from the builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+### Deploy with Docker Compose
+
+<Steps>
+  <Step title="Build and run with Docker Compose">
+    The easiest way to deploy Beat App is using Docker Compose:
+
+    ```bash
+    docker-compose up -d --build
+    ```
+
+    This command:
+    - Builds the production Docker image
+    - Starts the NGINX server
+    - Runs the container in detached mode
+    - Serves the app on port 3000
+  </Step>
+
+  <Step title="Verify deployment">
+    Check that the container is running:
+
+    ```bash
+    docker-compose ps
+    ```
+
+    View logs:
+
+    ```bash
+    docker-compose logs -f
+    ```
+
+    Access the app at `http://localhost:3000`.
+  </Step>
+
+  <Step title="Stop the container">
+    Stop the running container:
+
+    ```bash
+    docker-compose down
+    ```
+
+    Remove volumes (if needed):
+
+    ```bash
+    docker-compose down -v
+    ```
+  </Step>
+</Steps>
+
+### Manual Docker Build
+
+For more control, build and run the Docker image manually:
+
+```bash
+# Build the image
+docker build -t beat-app .
+
+# Run the container
+docker run -d -p 3000:3000 --name beat-app beat-app
+
+# View logs
+docker logs -f beat-app
+
+# Stop the container
+docker stop beat-app
+
+# Remove the container
+docker rm beat-app
+```
+
+## Project Structure
+
+After installation, your project structure will look like this:
+
+```text
+beat-app/
+├── public/                     # Public static assets
+├── src/
+│   ├── assets/                 # Images and local assets
+│   ├── components/             # React components
+│   │   ├── Player.jsx          # Main audio player
+│   │   ├── QueueDrawer.jsx     # Playback queue
+│   │   ├── TrackList.jsx       # Track listing component
+│   │   ├── SearchInput.jsx     # Search bar
+│   │   └── Sidebar.jsx         # Navigation sidebar
+│   ├── pages/                  # Route pages
+│   │   ├── HomePage.jsx        # Home page
+│   │   ├── SearchPage.jsx      # Search results
+│   │   ├── AlbumPage.jsx       # Album details
+│   │   └── ArtistPage.jsx      # Artist details
+│   ├── services/               # API services
+│   │   └── youtube-api.js      # YouTube Music API client
+│   ├── stores/                 # State management
+│   │   ├── playerStore.js      # Player state
+│   │   ├── searchStore.js      # Search state
+│   │   └── appStore.js         # App-wide state
+│   ├── layouts/                # Page layouts
+│   ├── App.jsx                 # Root component
+│   ├── main.jsx                # React entry point
+│   ├── audioEl.js              # Shared audio element
+│   └── routes.jsx              # Route configuration
+├── .env.example                # Environment template
+├── .dockerignore               # Docker ignore rules
+├── Dockerfile                  # Docker build instructions
+├── docker-compose.yml          # Docker Compose config
+├── nginx.conf                  # NGINX configuration
+├── package.json                # Dependencies and scripts
+└── vite.config.js              # Vite configuration
+```
+
+## Dependencies Breakdown
+
+### Production Dependencies
+
+```json
+{
+  "@emotion/react": "^11.14.0",
+  "@emotion/styled": "^11.14.1",
+  "@mui/icons-material": "^7.3.8",
+  "@mui/material": "^7.3.8",
+  "@nanostores/react": "^1.0.0",
+  "axios": "^1.7.2",
+  "react": "^18.2.0",
+  "react-dom": "^18.2.0",
+  "react-router-dom": "^6.23.1"
+}
+```
+
+### Development Dependencies
+
+```json
+{
+  "@vitejs/plugin-react": "^5.1.4",
+  "vite": "^7.3.1"
+}
+```
+
+## Vite Configuration
+
+The Vite configuration is minimal and optimized:
+
+```javascript
+// vite.config.js
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+});
+```
+
+<Info>
+  Vite provides instant HMR (Hot Module Replacement) for a seamless development experience.
+</Info>
+
+## Environment Variables
+
+Beat App uses Vite's environment variable system:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `VITE_API_URL` | Backend API base URL | Yes |
+| `VITE_YOUTUBE_API_TOKEN` | YouTube Music API authentication token | Yes |
+
+<Note>
+  Environment variables are loaded from `.env` files. Never commit `.env` files to version control.
+</Note>
+
+## Troubleshooting
+
+### Port Already in Use
+
+If port 5173 is already in use:
+
+```bash
+# Specify a different port
+vite --port 3001
+```
+
+Or update `vite.config.js`:
+
+```javascript
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3001
+  }
+});
+```
+
+### Module Not Found Errors
+
+Clear node_modules and reinstall:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
+### Docker Build Fails
+
+Ensure Docker has enough memory allocated (at least 2GB recommended):
+
+```bash
+# Check Docker memory
+docker info | grep Memory
+```
+
+### API Connection Issues
+
+Verify your `.env` configuration:
+
+```bash
+# Check environment variables are loaded
+console.log(import.meta.env.VITE_API_URL);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Get started with Beat App and play your first track
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore the YouTube API service and player store methods
+  </Card>
+  <Card title="Environment Variables" icon="gear" href="/deployment/environment-variables">
+    Learn about environment configuration
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/deployment/docker">
+    Deploy Beat App to cloud platforms
+  </Card>
+</CardGroup>

@@ -1,0 +1,361 @@
+---
+title: appStore
+description: Application-level state management for WebSocket connection status and global app state
+---
+
+The `appStore` manages global application state, primarily focusing on WebSocket connection readiness for real-time features.
+
+## Store Import
+
+```javascript
+import { appStore } from "../stores/appStore.js";
+import { useStore } from "@nanostores/react";
+
+// In a React component
+function App() {
+  const { wsReady } = useStore(appStore);
+  // ...
+}
+```
+
+---
+
+## State Shape
+
+The `appStore` is a Nanostores map with the following properties:
+
+<ResponseField name="wsReady" type="boolean" default={false}>
+  Indicates whether the WebSocket connection is established and ready to send/receive messages.
+  
+  - `false` - WebSocket is disconnected or connecting
+  - `true` - WebSocket is connected and ready
+</ResponseField>
+
+---
+
+## Updating State
+
+Since `appStore` is a Nanostores map, you can update individual properties using `setKey()`:
+
+```javascript
+import { appStore } from "../stores/appStore.js";
+
+// Mark WebSocket as ready
+appStore.setKey("wsReady", true);
+
+// Mark WebSocket as disconnected
+appStore.setKey("wsReady", false);
+```
+
+---
+
+## Reading State
+
+You can read the current state using the `get()` method or subscribe in React components:
+
+```javascript
+// Get current state (one-time read)
+const currentState = appStore.get();
+console.log(currentState.wsReady); // true or false
+
+// Subscribe to changes in React
+import { useStore } from "@nanostores/react";
+
+function AppStatus() {
+  const { wsReady } = useStore(appStore);
+  
+  return (
+    <div>
+      <p>WebSocket: {wsReady ? "Connected" : "Disconnected"}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## Usage Examples
+
+### WebSocket Connection Manager
+
+```jsx
+import { appStore } from "../stores/appStore.js";
+import { useEffect } from "react";
+
+function WebSocketProvider({ children }) {
+  useEffect(() => {
+    const ws = new WebSocket("wss://api.beatapp.com/ws");
+
+    ws.onopen = () => {
+      console.log("WebSocket connected");
+      appStore.setKey("wsReady", true);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket disconnected");
+      appStore.setKey("wsReady", false);
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      appStore.setKey("wsReady", false);
+    };
+
+    return () => {
+      ws.close();
+      appStore.setKey("wsReady", false);
+    };
+  }, []);
+
+  return children;
+}
+```
+
+### Connection Status Indicator
+
+```jsx
+import { appStore } from "../stores/appStore.js";
+import { useStore } from "@nanostores/react";
+
+function ConnectionStatus() {
+  const { wsReady } = useStore(appStore);
+
+  return (
+    <div className={`connection-indicator ${wsReady ? "online" : "offline"}`}>
+      <span className="status-dot" />
+      <span>{wsReady ? "Online" : "Connecting..."}</span>
+    </div>
+  );
+}
+```
+
+### Conditional Real-time Feature
+
+```jsx
+import { appStore } from "../stores/appStore.js";
+import { useStore } from "@nanostores/react";
+
+function LiveChat() {
+  const { wsReady } = useStore(appStore);
+  const [message, setMessage] = useState("");
+
+  const sendMessage = () => {
+    if (!wsReady) {
+      alert("WebSocket not connected. Please wait...");
+      return;
+    }
+
+    // Send message via WebSocket
+    websocket.send(JSON.stringify({ type: "chat", message }));
+    setMessage("");
+  };
+
+  return (
+    <div>
+      <input
+        type="text"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        disabled={!wsReady}
+      />
+      <button onClick={sendMessage} disabled={!wsReady}>
+        {wsReady ? "Send" : "Connecting..."}
+      </button>
+    </div>
+  );
+}
+```
+
+### Reconnection Logic
+
+```jsx
+import { appStore } from "../stores/appStore.js";
+import { useEffect, useState } from "react";
+
+function useWebSocket(url) {
+  const [ws, setWs] = useState(null);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+
+  useEffect(() => {
+    const connect = () => {
+      const websocket = new WebSocket(url);
+
+      websocket.onopen = () => {
+        console.log("Connected to WebSocket");
+        appStore.setKey("wsReady", true);
+        setReconnectAttempt(0);
+      };
+
+      websocket.onclose = () => {
+        console.log("WebSocket closed");
+        appStore.setKey("wsReady", false);
+
+        // Attempt to reconnect with exponential backoff
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
+        setTimeout(() => {
+          console.log(`Reconnecting... (attempt ${reconnectAttempt + 1})`);
+          setReconnectAttempt((prev) => prev + 1);
+          connect();
+        }, delay);
+      };
+
+      websocket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        appStore.setKey("wsReady", false);
+      };
+
+      setWs(websocket);
+    };
+
+    connect();
+
+    return () => {
+      if (ws) {
+        ws.close();
+        appStore.setKey("wsReady", false);
+      }
+    };
+  }, [url]);
+
+  return ws;
+}
+```
+
+### Loading Guard
+
+```jsx
+import { appStore } from "../stores/appStore.js";
+import { useStore } from "@nanostores/react";
+
+function App() {
+  const { wsReady } = useStore(appStore);
+
+  if (!wsReady) {
+    return (
+      <div className="loading-screen">
+        <h1>Beat App</h1>
+        <p>Connecting to server...</p>
+        <div className="spinner" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+      <Header />
+      <MainContent />
+      <Player />
+    </div>
+  );
+}
+```
+
+---
+
+## Extending appStore
+
+The `appStore` can be extended to include additional global application state:
+
+```javascript
+import { map } from 'nanostores'
+
+export const appStore = map({
+  wsReady: false,
+  // Add more global state
+  theme: 'dark',
+  userId: null,
+  notifications: [],
+  isOffline: false,
+})
+```
+
+Then update the state as needed:
+
+```javascript
+// Update theme
+appStore.setKey("theme", "light");
+
+// Set user ID
+appStore.setKey("userId", "user_123");
+
+// Add notification
+const currentState = appStore.get();
+appStore.setKey("notifications", [
+  ...currentState.notifications,
+  { id: Date.now(), message: "New track available" },
+]);
+
+// Set offline status
+appStore.setKey("isOffline", !navigator.onLine);
+```
+
+---
+
+## Complete Example
+
+```jsx
+import { appStore } from "../stores/appStore.js";
+import { useStore } from "@nanostores/react";
+import { useEffect } from "react";
+
+function AppContainer() {
+  const { wsReady } = useStore(appStore);
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    const ws = new WebSocket(process.env.REACT_APP_WS_URL);
+
+    ws.onopen = () => {
+      console.log("WebSocket connection established");
+      appStore.setKey("wsReady", true);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed");
+      appStore.setKey("wsReady", false);
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      appStore.setKey("wsReady", false);
+    };
+
+    // Cleanup on unmount
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Beat App</h1>
+        <ConnectionIndicator connected={wsReady} />
+      </header>
+      
+      {wsReady ? (
+        <main>
+          <MusicLibrary />
+          <Player />
+        </main>
+      ) : (
+        <div className="connecting">
+          <p>Establishing connection...</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConnectionIndicator({ connected }) {
+  return (
+    <div className="connection-status">
+      <div 
+        className="indicator" 
+        style={{ backgroundColor: connected ? "#22c55e" : "#ef4444" }}
+      />
+      <span>{connected ? "Connected" : "Disconnected"}</span>
+    </div>
+  );
+}
+```

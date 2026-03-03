@@ -1,0 +1,423 @@
+---
+title: playerStore
+description: Core music player state management with Nanostores for playback control, queue management, and player UI state
+---
+
+The `playerStore` is the central state management solution for the Beat App music player. It manages playback state, queue operations, and player UI using Nanostores.
+
+## Store Import
+
+```javascript
+import { playerStore, playerActions } from "../stores/playerStore.js";
+import { useStore } from "@nanostores/react";
+
+// In a React component
+function Player() {
+  const { isPlaying, currentTrack, duration, currentTime } = useStore(playerStore);
+  // ...
+}
+```
+
+---
+
+## State Shape
+
+The `playerStore` contains the following state properties:
+
+<ResponseField name="isPlaying" type="boolean" default={false}>
+  Indicates whether audio is currently playing. Automatically updated by audio element events.
+</ResponseField>
+
+<ResponseField name="currentTrackIndex" type="number" default={-1}>
+  Index of the currently playing track in the queue. `-1` indicates no track is selected.
+</ResponseField>
+
+<ResponseField name="currentTrack" type="object | null" default={null}>
+  The currently playing track object containing:
+  
+  <Expandable title="Track Properties">
+    <ResponseField name="trackId" type="string">
+      Unique identifier for the track
+    </ResponseField>
+    
+    <ResponseField name="title" type="string">
+      Track title
+    </ResponseField>
+    
+    <ResponseField name="artists" type="array">
+      Array of artist objects with `id` and `name` properties
+    </ResponseField>
+    
+    <ResponseField name="album" type="object">
+      Album information with `albumId`, `title`, and `name` properties
+    </ResponseField>
+    
+    <ResponseField name="thumbnailUrl" type="string">
+      URL to the track's thumbnail image
+    </ResponseField>
+    
+    <ResponseField name="duration" type="object">
+      Duration information with `label` property (e.g., "3:45")
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="queue" type="array" default={[]}>
+  Array of track objects representing the playback queue. Same structure as `currentTrack`.
+</ResponseField>
+
+<ResponseField name="isLoading" type="boolean" default={false}>
+  Indicates whether the player is loading/buffering audio data.
+</ResponseField>
+
+<ResponseField name="currentTime" type="number" default={0}>
+  Current playback position in seconds. Updated continuously during playback.
+</ResponseField>
+
+<ResponseField name="duration" type="number" default={0}>
+  Total duration of the current track in seconds.
+</ResponseField>
+
+<ResponseField name="isQueueOpen" type="boolean" default={false}>
+  Controls the visibility of the queue drawer UI.
+</ResponseField>
+
+<ResponseField name="queueDrawerWidth" type="number" default={0}>
+  Width of the queue drawer in pixels. Set to `300` when open, `0` when closed.
+</ResponseField>
+
+---
+
+## Actions
+
+All actions are available via the `playerActions` object.
+
+### toggleQueue()
+
+Toggles the queue drawer visibility.
+
+```javascript
+playerActions.toggleQueue();
+```
+
+**Behavior:**
+- Toggles `isQueueOpen` between `true` and `false`
+- Sets `queueDrawerWidth` to `300` when opening, `0` when closing
+
+**Example Usage:**
+```jsx
+// From Player.jsx:209
+<IconButton onClick={() => playerActions.toggleQueue()} size="small">
+  <QueueMusicRounded sx={{ color: "text.primary", fontSize: 20 }} />
+</IconButton>
+```
+
+---
+
+### togglePause()
+
+Toggles between play and pause states.
+
+```javascript
+playerActions.togglePause();
+```
+
+**Behavior:**
+- If audio is paused, calls `play()`
+- If audio is playing, calls `pause()`
+- State updates (`isPlaying`) are handled automatically by audio element event listeners
+
+**Example Usage:**
+```jsx
+// From Player.jsx:106
+<IconButton
+  aria-label={isPlaying ? "pause" : "play"}
+  onClick={playerActions.togglePause}
+>
+  {isPlaying ? <PauseRounded /> : <PlayArrowRounded />}
+</IconButton>
+```
+
+---
+
+### playTrack()
+
+Plays a specific track and optionally sets a new queue.
+
+<ParamField path="track" type="object" required>
+  The track object to play. Must contain at minimum a `trackId` property.
+</ParamField>
+
+<ParamField path="newQueue" type="array" default={null}>
+  Optional array of tracks to set as the new queue. If not provided, the existing queue is used.
+</ParamField>
+
+```javascript
+await playerActions.playTrack(track, newQueue);
+```
+
+**Behavior:**
+1. Sets `currentTrack` to the provided track
+2. Sets `isLoading` to `true`
+3. If `newQueue` is provided, replaces the current queue
+4. Finds the track's index in the queue
+5. Pauses current playback
+6. Updates Media Session metadata for OS integration
+7. Fetches the audio stream URL
+8. Begins playback
+
+**Example Usage:**
+```jsx
+// From TrackList.jsx:17
+const playTrackItem = (track) => {
+  playerActions.playTrack(track, tracks);
+};
+
+// From HomePage.jsx:37
+playerActions.playTrack(track, queue);
+
+// From AlbumPage.jsx:32
+playerActions.playTrack(album.tracks[0], album.tracks);
+```
+
+---
+
+### playNext()
+
+Skips to the next track in the queue.
+
+```javascript
+await playerActions.playNext();
+```
+
+**Behavior:**
+- If not at the end of the queue, advances to the next track
+- Sets `isLoading` to `true` during transition
+- Updates `currentTrackIndex` and `currentTrack`
+- Fetches audio URL and begins playback
+- If at the end of the queue, sets `isPlaying` to `false`
+
+**Example Usage:**
+```jsx
+// From Player.jsx:123
+<IconButton aria-label="next song" onClick={playerActions.playNext}>
+  <SkipNextRounded sx={{ color: "text.primary" }} />
+</IconButton>
+```
+
+---
+
+### playPrevious()
+
+Skips to the previous track in the queue, or restarts the current track.
+
+```javascript
+await playerActions.playPrevious();
+```
+
+**Behavior:**
+- If not at the beginning of the queue, goes to the previous track
+- Sets `isLoading` to `true` during transition
+- Updates `currentTrackIndex` and `currentTrack`
+- Fetches audio URL and begins playback
+- If already at the first track, resets `currentTime` to `0`
+
+**Example Usage:**
+```jsx
+// From Player.jsx:100
+<IconButton aria-label="previous song" onClick={playerActions.playPrevious}>
+  <SkipPreviousRounded sx={{ color: "text.primary" }} />
+</IconButton>
+```
+
+---
+
+### addToQueueMultiple()
+
+Adds multiple tracks to the end of the queue.
+
+<ParamField path="tracks" type="array" required>
+  Array of track objects to append to the queue.
+</ParamField>
+
+```javascript
+playerActions.addToQueueMultiple(tracks);
+```
+
+**Behavior:**
+- Appends all provided tracks to the end of the current queue
+- Does not affect currently playing track
+
+---
+
+### addToQueue()
+
+Adds a single track to the end of the queue.
+
+<ParamField path="track" type="object" required>
+  Track object to append to the queue.
+</ParamField>
+
+```javascript
+playerActions.addToQueue(track);
+```
+
+**Behavior:**
+- Appends the track to the end of the current queue
+- Does not affect currently playing track
+
+---
+
+### addToQueueNext()
+
+Adds a track immediately after the currently playing track.
+
+<ParamField path="track" type="object" required>
+  Track object to insert into the queue.
+</ParamField>
+
+```javascript
+playerActions.addToQueueNext(track);
+```
+
+**Behavior:**
+- Inserts the track at position `currentTrackIndex + 1`
+- The track will play next when `playNext()` is called
+- Does not affect currently playing track
+
+---
+
+### seekTo()
+
+Seeks to a specific time position in the current track.
+
+<ParamField path="time" type="number" required>
+  Time in seconds to seek to. Must be a finite number.
+</ParamField>
+
+```javascript
+playerActions.seekTo(time);
+```
+
+**Behavior:**
+- Sets the audio element's `currentTime` to the specified value
+- Updates the `currentTime` state
+- Updates Media Session position state for OS integration
+- Validates that `time` is a valid, finite number
+
+**Example Usage:**
+```jsx
+// From Player.jsx:138
+<Slider
+  aria-label="time-indicator"
+  value={parseInt(currentTime * 5)}
+  max={parseInt(duration * 5)}
+  onChange={(_, value) => playerActions.seekTo(value / 5)}
+/>
+```
+
+---
+
+## Media Session Integration
+
+The player store automatically integrates with the browser's Media Session API for:
+
+- Lock screen playback controls
+- OS media notifications
+- Headphone/keyboard media keys
+- Now playing metadata display
+
+This integration is configured in the `onMount` lifecycle (playerStore.js:161-222) and includes:
+
+- Play/pause controls
+- Next/previous track navigation
+- Seek controls
+- Artwork and metadata display
+
+---
+
+## Audio Element Events
+
+The store automatically listens to audio element events and updates state accordingly:
+
+<Expandable title="Event Handlers">
+  <ResponseField name="onended">
+    Automatically calls `playNext()` when a track finishes
+  </ResponseField>
+  
+  <ResponseField name="onplay">
+    Sets `isPlaying` to `true` and updates Media Session playback state
+  </ResponseField>
+  
+  <ResponseField name="onplaying">
+    Sets `isLoading` to `false` when playback begins
+  </ResponseField>
+  
+  <ResponseField name="onwaiting">
+    Sets `isLoading` to `true` during buffering
+  </ResponseField>
+  
+  <ResponseField name="onerror">
+    Sets `isLoading` and `isPlaying` to `false` on error
+  </ResponseField>
+  
+  <ResponseField name="onpause">
+    Sets `isPlaying` to `false` and updates Media Session playback state
+  </ResponseField>
+  
+  <ResponseField name="onloadedmetadata">
+    Updates `duration` when metadata is loaded
+  </ResponseField>
+  
+  <ResponseField name="ontimeupdate">
+    Continuously updates `currentTime` during playback
+  </ResponseField>
+</Expandable>
+
+---
+
+## Complete Usage Example
+
+```jsx
+import { playerStore, playerActions } from "../stores/playerStore.js";
+import { useStore } from "@nanostores/react";
+
+function MusicPlayer() {
+  // Subscribe to store
+  const { isPlaying, currentTrack, isLoading, currentTime, duration, queue } = 
+    useStore(playerStore);
+
+  // Play a track with a new queue
+  const handlePlayAlbum = (tracks) => {
+    playerActions.playTrack(tracks[0], tracks);
+  };
+
+  // Control playback
+  const handlePlayPause = () => {
+    playerActions.togglePause();
+  };
+
+  // Seek to position
+  const handleSeek = (seconds) => {
+    playerActions.seekTo(seconds);
+  };
+
+  // Add to queue
+  const handleAddToQueue = (track) => {
+    playerActions.addToQueue(track);
+  };
+
+  return (
+    <div>
+      <p>{currentTrack?.title ?? "No track playing"}</p>
+      <p>{currentTime} / {duration}</p>
+      <button onClick={handlePlayPause}>
+        {isLoading ? "Loading..." : isPlaying ? "Pause" : "Play"}
+      </button>
+      <button onClick={playerActions.playPrevious}>Previous</button>
+      <button onClick={playerActions.playNext}>Next</button>
+      <p>Queue: {queue.length} tracks</p>
+    </div>
+  );
+}
+```

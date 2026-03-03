@@ -1,80 +1,283 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get Beat App running locally in under 5 minutes
 ---
 
-## Get started in three steps
+# Quickstart Guide
 
-Get your documentation site running locally and make your first customization.
+Get Beat App up and running on your local machine in just a few minutes. This guide will walk you through the essential steps to start streaming music.
 
-### Step 1: Set up your local environment
+<Note>
+  **Prerequisites**: Node.js v18 or higher and npm/yarn/pnpm installed on your system.
+</Note>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    First, clone the Beat App repository to your local machine:
+
+    ```bash
+    git clone https://github.com/yourusername/beat-app.git
+    cd beat-app
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install the required npm packages using your preferred package manager:
+
+    <CodeGroup>
+      ```bash npm
+      npm install
+      ```
+
+      ```bash yarn
+      yarn install
+      ```
+
+      ```bash pnpm
+      pnpm install
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Configure environment variables">
+    Copy the example environment file and configure your API credentials:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Edit the `.env` file with your API credentials:
+
+    ```bash
+    VITE_API_URL=http://localhost:3000
+    VITE_YOUTUBE_API_TOKEN=your_token_here
+    ```
+
+    <Info>
+      You'll need a valid YouTube Music API token to stream music. Contact your API provider for credentials.
+    </Info>
+  </Step>
+
+  <Step title="Start the development server">
+    Launch the Vite development server:
+
+    <CodeGroup>
+      ```bash npm
+      npm run dev
+      ```
+
+      ```bash yarn
+      yarn dev
+      ```
+
+      ```bash pnpm
+      pnpm dev
+      ```
+    </CodeGroup>
+
+    The app will start at `http://localhost:5173` by default.
+  </Step>
+</Steps>
+
+## Your First Music Search
+
+Once the development server is running, try these actions:
+
+<Steps>
+  <Step title="Open the app">
+    Navigate to `http://localhost:5173` in your browser.
+  </Step>
+
+  <Step title="Search for a track">
+    Use the search bar in the top navigation to search for your favorite artist or song.
+  </Step>
+
+  <Step title="Start playing">
+    Click on any track to start playback. The player controls will appear at the bottom of the screen.
+  </Step>
+
+  <Step title="Manage your queue">
+    Click the queue icon to open the queue drawer and see upcoming tracks. You can:
+    - Add tracks to the queue
+    - Play tracks next
+    - Reorder the queue
+  </Step>
+</Steps>
+
+## Understanding the Player Store
+
+Beat App uses Nanostores for state management. Here's how the player store works:
+
+```javascript
+// src/stores/playerStore.js
+import { map } from "nanostores";
+import audioEl from "../audioEl";
+
+const initialState = {
+  isPlaying: false,
+  currentTrackIndex: -1,
+  currentTrack: null,
+  queue: [],
+  isLoading: false,
+  currentTime: 0,
+  duration: 0,
+  isQueueOpen: false,
+};
+
+export const playerStore = map(initialState);
+
+export const playerActions = {
+  playTrack: async (track, newQueue = null) => {
+    playerStore.setKey("currentTrack", track);
+    playerStore.setKey("isLoading", true);
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    if (newQueue) {
+      playerStore.setKey("queue", newQueue);
+    }
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    const audioUrl = await getAudioUrl(track.trackId);
+    audioEl.src = audioUrl;
+    audioEl.play();
+  },
+  
+  togglePause: () => {
+    if (audioEl.paused) audioEl.play();
+    else audioEl.pause();
+  },
+  
+  addToQueue: (track) => {
+    const state = playerStore.get();
+    playerStore.setKey("queue", [...state.queue, track]);
+  },
+};
+```
 
-### Step 2: Deploy your changes
+<Info>
+  The player store automatically syncs with the HTML5 Audio element and updates the Media Session API for native OS controls.
+</Info>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## Using the Player in Components
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+Access player state and actions in any React component:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+```jsx
+import { useStore } from '@nanostores/react';
+import { playerStore, playerActions } from '../stores/playerStore';
 
-### Step 3: Go live
+function TrackItem({ track }) {
+  const { currentTrack, isPlaying } = useStore(playerStore);
+  const isCurrentTrack = currentTrack?.trackId === track.trackId;
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  const handlePlay = () => {
+    playerActions.playTrack(track, [track]);
+  };
 
-## Next steps
+  const handleAddToQueue = () => {
+    playerActions.addToQueue(track);
+  };
 
-Now that you have your docs running, explore these key features:
+  return (
+    <div>
+      <h3>{track.title}</h3>
+      <p>{track.artists[0]?.name}</p>
+      <button onClick={handlePlay}>
+        {isCurrentTrack && isPlaying ? 'Pause' : 'Play'}
+      </button>
+      <button onClick={handleAddToQueue}>Add to Queue</button>
+    </div>
+  );
+}
+```
+
+## Searching for Music
+
+The YouTube API service provides comprehensive search capabilities:
+
+```javascript
+// src/services/youtube-api.js
+import axios from 'axios';
+import { YOUTUBE_API } from '../constants';
+
+const HEADERS = { 
+  Authorization: `Bearer ${import.meta.env.VITE_YOUTUBE_API_TOKEN}` 
+};
+
+export async function searchTracks(query) {
+  try {
+    const res = await axios.get(`${YOUTUBE_API}/search`, { 
+      params: { q: query, filter: 'SONG' }, 
+      headers: HEADERS 
+    });
+    return { 
+      tracks: (res.data.data?.items || []).map(mapSong), 
+      continuation: res.data.data?.continuation 
+    };
+  } catch (e) { 
+    return { tracks: [] }; 
+  }
+}
+
+export async function searchAlbums(query) {
+  try {
+    const res = await axios.get(`${YOUTUBE_API}/search`, { 
+      params: { q: query, filter: 'ALBUM' }, 
+      headers: HEADERS 
+    });
+    return { albums: (res.data.data?.items || []).map(mapAlbum) };
+  } catch (e) { 
+    return { albums: [] }; 
+  }
+}
+
+export async function searchArtists(query) {
+  try {
+    const res = await axios.get(`${YOUTUBE_API}/search`, { 
+      params: { q: query, filter: 'ARTIST' }, 
+      headers: HEADERS 
+    });
+    return { artists: (res.data.data?.items || []).map(mapArtist) };
+  } catch (e) { 
+    return { artists: [] }; 
+  }
+}
+```
+
+## Key Features to Explore
 
 <CardGroup cols={2}>
+  <Card title="Search System" icon="magnifying-glass">
+    Search for tracks, albums, artists, and playlists with dedicated result pages
+  </Card>
+  <Card title="Queue Management" icon="list">
+    Build and manage your playback queue with play next/add to queue options
+  </Card>
+  <Card title="Media Controls" icon="mobile">
+    Control playback from your keyboard, OS media controls, or lock screen
+  </Card>
+  <Card title="Theme Toggle" icon="palette">
+    Switch between light and dark modes with the theme toggle button
+  </Card>
+</CardGroup>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+## Next Steps
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="book" href="/installation">
+    Learn about advanced installation options and production builds
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore the complete API service and store documentation
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/deployment/docker">
+    Deploy Beat App to production with Docker and NGINX
+  </Card>
+  <Card title="Architecture" icon="cubes" href="/architecture/components">
+    Discover the component structure and architecture
+  </Card>
 </CardGroup>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  Having issues? Check the browser console for error messages and ensure your API credentials are correctly configured.
 </Note>

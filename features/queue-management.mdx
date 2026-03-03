@@ -1,0 +1,374 @@
+---
+title: Queue Management
+description: View, organize, and control your playback queue with the queue drawer interface
+---
+
+## Overview
+
+The queue drawer shows all upcoming tracks in your playback session. Access it from the player bar to see what's playing next and jump to any track in the queue.
+
+## Opening the Queue
+
+Click the queue icon in the player bar to toggle the queue drawer:
+
+```jsx
+<IconButton onClick={() => playerActions.toggleQueue()} size="small">
+  <QueueMusicRounded sx={{ color: "text.primary", fontSize: 20 }} />
+</IconButton>
+```
+
+The queue drawer slides in from the right side of the screen:
+
+```javascript
+toggleQueue: () => {
+  const state = playerStore.get();
+  playerStore.setKey("isQueueOpen", !state.isQueueOpen);
+  playerStore.setKey("queueDrawerWidth", state.isQueueOpen ? 0 : 300);
+}
+```
+
+<Info>
+The queue drawer is only visible on screens wider than mobile (sm breakpoint and above) to preserve screen space on smaller devices.
+</Info>
+
+## Queue Drawer Interface
+
+The queue drawer (`src/components/QueueDrawer.jsx:5`) displays your current playback queue:
+
+```jsx
+function QueueDrawer() {
+  const { isQueueOpen, queue, currentTrackIndex, queueDrawerWidth } = useStore(playerStore);
+
+  return (
+    <Drawer
+      anchor="right"
+      variant="persistent"
+      open={isQueueOpen}
+      sx={{
+        display: { xs: "none", sm: "block" },
+        width: isQueueOpen ? queueDrawerWidth : 0,
+        transition: 'width 0.2s',
+      }}
+    >
+      <Box sx={{ width: queueDrawerWidth, p: 2 }}>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>
+          Queue
+        </Typography>
+        <List>
+          {queue.map((track, index) => (
+            <ListItem
+              key={index}
+              onClick={() => playerActions.playTrack(track)}
+              sx={{
+                backgroundColor:
+                  currentTrackIndex === index ? "action.selected" : "transparent",
+                cursor: "pointer",
+              }}
+            >
+              <ListItemText
+                primary={track.title}
+                secondary={track.artists[0]?.name}
+              />
+            </ListItem>
+          ))}
+        </List>
+      </Box>
+    </Drawer>
+  );
+}
+```
+
+## Queue Visual Indicators
+
+The currently playing track is highlighted with:
+
+- Selected background color
+- Bold font weight
+- Gradient border on the left side
+
+```jsx
+sx={{
+  borderRadius: "0px 10px 10px 0px",
+  backgroundColor:
+    currentTrackIndex === index ? "action.selected" : "transparent",
+  ...(currentTrackIndex === index && {
+    borderLeft: "3px solid",
+    borderImage: "linear-gradient(135deg, #7c3aed, #06b6d4) 1",
+  }),
+}}
+```
+
+## Playing from Queue
+
+Click any track in the queue to jump to it immediately:
+
+```jsx
+<ListItem
+  onClick={() => playerActions.playTrack(track)}
+  sx={{ cursor: "pointer" }}
+>
+  <ListItemText
+    primary={track.title}
+    secondary={track.artists[0]?.name}
+  />
+</ListItem>
+```
+
+<Note>
+When you click a track in the queue, playback jumps to that position while maintaining the rest of your queue.
+</Note>
+
+## Adding Tracks to Queue
+
+There are multiple ways to add tracks to your queue programmatically:
+
+<Tabs>
+  <Tab title="Add Single Track">
+    Add a track to the end of the queue:
+    
+    ```javascript
+    addToQueue: (track) => {
+      const state = playerStore.get();
+      playerStore.setKey("queue", [...state.queue, track]);
+    }
+    ```
+  </Tab>
+
+  <Tab title="Add Multiple Tracks">
+    Add multiple tracks at once:
+    
+    ```javascript
+    addToQueueMultiple: (tracks) => {
+      const state = playerStore.get();
+      playerStore.setKey("queue", [...state.queue, ...tracks]);
+    }
+    ```
+  </Tab>
+
+  <Tab title="Play Next">
+    Insert a track to play after the current one:
+    
+    ```javascript
+    addToQueueNext: (track) => {
+      const state = playerStore.get();
+      playerStore.setKey("queue", [
+        ...state.queue.slice(0, state.currentTrackIndex + 1),
+        track,
+        ...state.queue.slice(state.currentTrackIndex + 1),
+      ]);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Queue State Management
+
+The queue is managed in the player store (`src/stores/playerStore.js:33`):
+
+```javascript
+const initialState = {
+  queue: [],
+  currentTrackIndex: -1,
+  isQueueOpen: false,
+  queueDrawerWidth: 0,
+};
+```
+
+### Queue Updates
+
+When you play a track, the queue can be optionally replaced:
+
+```javascript
+playTrack: async (track, newQueue = null) => {
+  playerStore.setKey("currentTrack", track);
+  
+  if (newQueue) {
+    playerStore.setKey("queue", newQueue);
+  }
+  
+  const state = playerStore.get();
+  const trackIndex = state.queue.findIndex(
+    (t) => t.trackId === track.trackId
+  );
+  
+  if (trackIndex !== -1) {
+    playerStore.setKey("currentTrackIndex", trackIndex);
+    // Play track at index
+  } else {
+    // Track not in queue, create new queue with just this track
+    playerStore.setKey("currentTrackIndex", 0);
+    playerStore.setKey("queue", [track]);
+  }
+}
+```
+
+## Queue Navigation
+
+Navigate through your queue using the skip buttons:
+
+<Steps>
+  <Step title="Next Track">
+    Skip to the next track in queue:
+    
+    ```javascript
+    playNext: async () => {
+      const state = playerStore.get();
+      if (state.currentTrackIndex < state.queue.length - 1) {
+        const nextIndex = state.currentTrackIndex + 1;
+        const nextTrack = state.queue[nextIndex];
+        playerStore.setKey("currentTrackIndex", nextIndex);
+        playerStore.setKey("currentTrack", nextTrack);
+        // Load and play next track
+      } else {
+        playerStore.setKey("isPlaying", false);
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Previous Track">
+    Go back to the previous track:
+    
+    ```javascript
+    playPrevious: async () => {
+      const state = playerStore.get();
+      if (state.currentTrackIndex > 0) {
+        const prevIndex = state.currentTrackIndex - 1;
+        const prevTrack = state.queue[prevIndex];
+        playerStore.setKey("currentTrackIndex", prevIndex);
+        playerStore.setKey("currentTrack", prevTrack);
+        // Load and play previous track
+      } else {
+        audioEl.currentTime = 0; // Restart current track
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Auto-advance">
+    Automatically play next track when current ends:
+    
+    ```javascript
+    audioEl.onended = () => {
+      playerActions.playNext();
+    };
+    ```
+  </Step>
+</Steps>
+
+## Queue Interaction Patterns
+
+### Playing an Album
+
+When you play an album, all tracks are added to the queue:
+
+```javascript
+const playAlbum = (tracks) => {
+  if (tracks.length > 0) {
+    playerActions.playTrack(tracks[0], tracks);
+  }
+};
+```
+
+### Playing from Track List
+
+Clicking a track in any list sets that list as the queue:
+
+```javascript
+const playTrackItem = (track) => {
+  playerActions.playTrack(track, tracks); // 'tracks' is the full list
+};
+```
+
+### Single Track Playback
+
+Playing a single track creates a queue with just that track:
+
+```javascript
+// If track not found in queue, create new queue
+playerStore.setKey("queue", [track]);
+playerStore.setKey("currentTrackIndex", 0);
+```
+
+## Queue UI Details
+
+<Tabs>
+  <Tab title="Styling">
+    The queue drawer has smooth animations:
+    
+    ```jsx
+    sx={{
+      width: isQueueOpen ? queueDrawerWidth : 0,
+      transition: 'width 0.2s',
+      "& .MuiDrawer-paper": {
+        width: queueDrawerWidth,
+        borderLeft: "1px solid",
+        borderColor: "divider",
+      },
+    }}
+    ```
+  </Tab>
+
+  <Tab title="Hover Effects">
+    Queue items highlight on hover:
+    
+    ```jsx
+    sx={{
+      transition: "background-color 150ms",
+      "&:hover": { 
+        backgroundColor: "action.hover" 
+      },
+    }}
+    ```
+  </Tab>
+
+  <Tab title="Scrolling">
+    Queue drawer hides scrollbar for cleaner look:
+    
+    ```jsx
+    "& .MuiDrawer-paper::-webkit-scrollbar": {
+      display: "none",
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Queue Information Display
+
+Each queue item shows:
+
+- Track title (primary text)
+- Artist name (secondary text)
+- Truncated text with ellipsis for long names
+- Different font weights for current vs upcoming tracks
+
+```jsx
+<ListItemText
+  primary={track.title}
+  secondary={track.artists[0]?.name}
+  primaryTypographyProps={{
+    noWrap: true,
+    fontWeight: currentTrackIndex === index ? 600 : 400,
+    fontSize: "0.875rem",
+  }}
+  secondaryTypographyProps={{
+    noWrap: true,
+    fontSize: "0.75rem",
+  }}
+/>
+```
+
+<Note>
+The queue drawer uses a fixed width of 300px when open, providing consistent sizing across all screen sizes.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Music Playback" icon="play" href="/features/music-playback">
+    Learn about player controls
+  </Card>
+  <Card title="Media Controls" icon="mobile" href="/features/media-controls">
+    Control queue from media keys
+  </Card>
+</CardGroup>

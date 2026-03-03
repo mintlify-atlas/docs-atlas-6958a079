@@ -1,0 +1,244 @@
+---
+title: Environment Variables
+description: Configure Beat App using environment variables for API endpoints and authentication
+---
+
+Beat App uses environment variables to configure API endpoints and external service integrations. These variables are processed at build time by Vite.
+
+## Overview
+
+<Warning>
+  Beat App is a static frontend application built with Vite. Environment variables are embedded into the JavaScript bundle at **build time**, not runtime. You must rebuild the application whenever you change environment variables.
+</Warning>
+
+## Environment File Setup
+
+Beat App includes a `.env.example` file with all required variables:
+
+<Steps>
+  <Step title="Copy the example file">
+    Create your local environment file:
+    ```bash
+    cp .env.example .env
+    ```
+  </Step>
+
+  <Step title="Configure variables">
+    Edit `.env` and set your values:
+    ```bash
+    VITE_API_URL=http://localhost:3000
+    VITE_YOUTUBE_API_TOKEN=your_token_here
+    ```
+  </Step>
+
+  <Step title="Rebuild the application">
+    Environment changes require a rebuild:
+    ```bash
+    npm run build
+    # or for Docker
+    docker-compose up -d --build
+    ```
+  </Step>
+</Steps>
+
+## Available Variables
+
+All environment variables in Beat App must be prefixed with `VITE_` to be accessible in the frontend code.
+
+### VITE_API_URL
+
+<ParamField path="VITE_API_URL" type="string" required>
+  The base URL for the Beat App API backend.
+
+  **Default:** `http://localhost:3000`
+
+  **Examples:**
+  - Development: `http://localhost:3000`
+  - Production: `https://api.beatapp.com`
+  - Docker: `http://beat-api:3000`
+</ParamField>
+
+<Note>
+  This URL is used by the frontend to make API requests for track data, album information, and artist details.
+</Note>
+
+### VITE_YOUTUBE_API_TOKEN
+
+<ParamField path="VITE_YOUTUBE_API_TOKEN" type="string" required>
+  YouTube API authentication token for fetching music data.
+
+  **Default:** `your_token_here`
+
+  **Where to get it:**
+  1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+  2. Create a new project or select an existing one
+  3. Enable the YouTube Data API v3
+  4. Create credentials (API Key)
+  5. Copy the API key to this variable
+</ParamField>
+
+<Warning>
+  Keep your API token secure. Never commit `.env` files to version control. The `.gitignore` and `.dockerignore` files are configured to exclude environment files.
+</Warning>
+
+## Environment File Structure
+
+Here's the complete `.env.example` file:
+
+```bash
+VITE_API_URL=http://localhost:3000
+VITE_YOUTUBE_API_TOKEN=your_token_here
+```
+
+## Development vs Production
+
+### Development
+
+For local development, create a `.env` file in the project root:
+
+```bash .env
+VITE_API_URL=http://localhost:3000
+VITE_YOUTUBE_API_TOKEN=your_development_token
+```
+
+Start the dev server:
+```bash
+npm run dev
+```
+
+### Production
+
+For production deployments, you have several options:
+
+<CodeGroup>
+```bash Docker Compose
+# Set in .env file (read by docker-compose.yml)
+VITE_API_URL=https://api.beatapp.com
+VITE_YOUTUBE_API_TOKEN=your_production_token
+
+# Build and deploy
+docker-compose up -d --build
+```
+
+```bash Docker Build Args
+# Pass as build arguments
+docker build \
+  --build-arg VITE_API_URL=https://api.beatapp.com \
+  --build-arg VITE_YOUTUBE_API_TOKEN=your_production_token \
+  -t beat-app .
+```
+
+```bash Direct Build
+# Set in .env file
+echo "VITE_API_URL=https://api.beatapp.com" > .env
+echo "VITE_YOUTUBE_API_TOKEN=your_production_token" >> .env
+
+# Build
+npm run build
+```
+</CodeGroup>
+
+## How Vite Processes Environment Variables
+
+Vite exposes environment variables to your source code via `import.meta.env`:
+
+```javascript
+// Accessing environment variables in code
+const apiUrl = import.meta.env.VITE_API_URL;
+const youtubeToken = import.meta.env.VITE_YOUTUBE_API_TOKEN;
+```
+
+<Note>
+  Only variables prefixed with `VITE_` are exposed to the client-side code. This prevents accidentally exposing server-side secrets.
+</Note>
+
+## Docker Environment Variables
+
+The `docker-compose.yml` configuration passes environment variables as build arguments:
+
+```yaml
+services:
+  beat-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_YOUTUBE_API_TOKEN: ${VITE_YOUTUBE_API_TOKEN}
+```
+
+These are read from your `.env` file in the same directory as `docker-compose.yml`.
+
+## Security Best Practices
+
+<Warning>
+  Environment variables in frontend applications are **NOT SECRET**. They are embedded in the JavaScript bundle and visible to anyone who inspects the source code.
+</Warning>
+
+### Do's
+
+- Use environment variables for configuration (URLs, feature flags)
+- Use API tokens that are scoped for frontend/public use only
+- Rotate API keys regularly
+- Use different tokens for development and production
+
+### Don'ts
+
+- Never store private keys or secrets in frontend environment variables
+- Never commit `.env` files to version control
+- Don't use admin-level API tokens in the frontend
+- Don't assume environment variables are hidden from users
+
+## Troubleshooting
+
+### Variables not defined
+
+If `import.meta.env.VITE_API_URL` returns `undefined`:
+
+1. Verify the variable name starts with `VITE_`
+2. Ensure the `.env` file is in the project root
+3. Rebuild the application (`npm run build` or `docker-compose up -d --build`)
+4. Check that the `.env` file is not ignored by `.gitignore`
+
+### Changes not reflecting
+
+Environment variables are embedded at build time:
+
+```bash
+# Stop the dev server and restart
+npm run dev
+
+# Or rebuild for production
+npm run build
+
+# For Docker
+docker-compose down
+docker-compose up -d --build
+```
+
+### Docker not reading .env
+
+Ensure your `.env` file is in the same directory as `docker-compose.yml`:
+
+```bash
+# Check file location
+ls -la .env
+
+# Verify docker-compose reads it
+docker-compose config
+```
+
+## Multiple Environments
+
+Vite supports multiple environment files:
+
+```
+.env                # Loaded in all cases
+.env.local          # Loaded in all cases, ignored by git
+.env.development    # Only loaded in development mode
+.env.production     # Only loaded in production mode
+```
+
+<Note>
+  Files like `.env.local` are excluded by `.dockerignore` and `.gitignore`. Use `.env` for Docker deployments.
+</Note>

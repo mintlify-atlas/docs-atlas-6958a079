@@ -1,0 +1,304 @@
+---
+title: Search
+description: Search for tracks, albums, and artists with real-time results and tabbed navigation
+---
+
+## Overview
+
+Beat App's search feature lets you discover music across tracks, albums, and artists. The search interface provides instant results as you type with a clean, organized layout.
+
+## Search Input
+
+The search bar (`src/components/SearchInput.jsx:9`) features:
+
+- Real-time search with 500ms debouncing
+- Automatic URL routing to maintain search state
+- Clean, focused design with Material UI components
+
+<Steps>
+  <Step title="Enter Search Query">
+    Type your search in the search bar. The input automatically debounces to avoid excessive API calls:
+    
+    ```jsx
+    const handleChange = (e) => {
+      const value = e.target.value;
+      setSearch(value);
+
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+
+      debounceRef.current = setTimeout(() => {
+        if (value.trim()) {
+          navigate(`/search/${value.trim()}`);
+        }
+      }, 500);
+    };
+    ```
+  </Step>
+
+  <Step title="View Results">
+    Results appear automatically in categorized sections (All, Tracks, Albums, Artists)
+  </Step>
+
+  <Step title="Navigate Categories">
+    Use the tab interface to filter results by content type
+  </Step>
+</Steps>
+
+## Search Interface
+
+The search input component provides a polished user experience:
+
+```jsx
+<Paper
+  component="form"
+  sx={{
+    p: "2px 4px",
+    display: "flex",
+    alignItems: "center",
+    maxWidth: 480,
+    borderRadius: "24px",
+    "&:focus-within": {
+      borderColor: "primary.main",
+      boxShadow: "0 0 0 3px rgba(124,58,237,0.12)",
+    },
+  }}
+>
+  <IconButton type="button" aria-label="search" disabled>
+    <SearchIcon />
+  </IconButton>
+  <InputBase
+    type="search"
+    value={search}
+    onChange={handleChange}
+    placeholder="Search tracks, albums, artists..."
+  />
+</Paper>
+```
+
+<Info>
+The search bar maintains focus styling with a subtle purple glow to match Beat App's brand colors.
+</Info>
+
+## Search Results Layout
+
+Search results are organized into tabbed sections:
+
+### All Results
+
+The "All" tab (`src/components/SearchAllResults.jsx:6`) shows a preview of each category:
+
+```jsx
+export default function SearchAllResults() {
+  return (
+    <>
+      <h4>Tracks</h4>
+      <SearchTracksResults hideLoadMore showRouterLink limit="4" />
+      <h4>Artists</h4>
+      <SearchArtistsResults hideLoadMore showRouterLink onlyOneRow />
+      <h4>Albums</h4>
+      <SearchAlbumsResults hideLoadMore showRouterLink onlyOneRow />
+    </>
+  );
+}
+```
+
+- Shows top 4 tracks
+- One row of artists
+- One row of albums
+- Links to dedicated pages for each category
+
+### Track Results
+
+Track search results display:
+
+- Track title and artist names
+- Album artwork thumbnail
+- Album name (clickable link)
+- Track duration
+- Play on click functionality
+
+### Artist Results
+
+Artist cards show:
+
+- Circular artist avatar
+- Artist name
+- Subscriber count
+- Link to artist page
+
+### Album Results
+
+Album cards display:
+
+- Square album artwork
+- Album title
+- Artist name
+- Link to album page
+
+## Trending Content
+
+The search page (`src/pages/SearchPage.jsx:12`) displays trending content before any search is performed:
+
+```jsx
+export default function SearchPage() {
+  const [trendingSections, setTrendingSections] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchTrending() {
+      setLoading(true);
+      const data = await getCharts();
+      setTrendingSections(data.sections || []);
+      setLoading(false);
+    }
+    fetchTrending();
+  }, []);
+
+  return (
+    <PageLayout>
+      <PageContent>
+        <Box className="page-enter" sx={{ p: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
+            <TrendingUpRoundedIcon sx={{ color: "primary.main" }} />
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              Trending Now
+            </Typography>
+          </Box>
+          {/* Trending sections display */}
+        </Box>
+      </PageContent>
+    </PageLayout>
+  );
+}
+```
+
+<Note>
+Trending content helps users discover popular music without needing to search first.
+</Note>
+
+## Search URL Structure
+
+Search queries are reflected in the URL for easy sharing and bookmarking:
+
+- Base search: `/search`
+- Search query: `/search/{query}`
+- Tracks tab: `/search/{query}/tracks`
+- Albums tab: `/search/{query}/albums`
+- Artists tab: `/search/{query}/artists`
+
+The search input automatically syncs with the URL:
+
+```jsx
+useEffect(() => {
+  const match = location.pathname.match(/^\/search\/([^/]+)/);
+  if (match) {
+    setSearch(decodeURIComponent(match[1]));
+  }
+}, [location.pathname]);
+```
+
+## Trending Cards
+
+Trending content is displayed in horizontal scrollable cards:
+
+```jsx
+{trendingSections.map((section, idx) => (
+  <HorizontalScroll key={idx} title={section.title}>
+    {(section.items || []).map((item, i) => (
+      <Card
+        component={Link}
+        to={
+          item.browseId
+            ? item.type === "artist"
+              ? `/artist/${item.browseId}`
+              : `/album/${item.browseId}`
+            : "#"
+        }
+        className="section-card"
+      >
+        {item.type === "artist" ? (
+          <Avatar src={`${PROXY_URL}${item.thumbnail}`} />
+        ) : (
+          <CardMedia image={`${PROXY_URL}${item.thumbnail}`} />
+        )}
+        <CardContent>
+          <Typography variant="body2">
+            {item.title || item.name}
+          </Typography>
+        </CardContent>
+      </Card>
+    ))}
+  </HorizontalScroll>
+))}
+```
+
+## Search Performance
+
+<Tabs>
+  <Tab title="Debouncing">
+    Search requests are debounced to reduce API calls:
+    
+    ```javascript
+    // 500ms delay before triggering search
+    debounceRef.current = setTimeout(() => {
+      if (value.trim()) {
+        navigate(`/search/${value.trim()}`);
+      }
+    }, 500);
+    ```
+  </Tab>
+
+  <Tab title="Cleanup">
+    Proper cleanup prevents memory leaks:
+    
+    ```javascript
+    useEffect(() => {
+      return () => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+      };
+    }, []);
+    ```
+  </Tab>
+
+  <Tab title="Empty State">
+    Show helpful message when no results:
+    
+    ```jsx
+    {!loading && trendingSections.length === 0 && (
+      <Box sx={{ textAlign: "center", mt: 8 }}>
+        <Typography variant="h6" color="text.secondary">
+          Start searching for music above
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Find your favorite tracks, albums, and artists
+        </Typography>
+      </Box>
+    )}
+    ```
+  </Tab>
+</Tabs>
+
+## Playing from Search Results
+
+Click any track in search results to play it immediately. The track list component handles playback:
+
+```javascript
+const playTrackItem = (track) => {
+  playerActions.playTrack(track, tracks);
+};
+```
+
+When you play a track from search results, all visible tracks become your playback queue.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Music Playback" icon="play" href="/features/music-playback">
+    Learn how to control playback
+  </Card>
+  <Card title="Library" icon="heart" href="/features/library">
+    Save tracks to your library
+  </Card>
+</CardGroup>

@@ -1,0 +1,140 @@
+---
+title: Welcome to Beat App
+description: A modern, responsive web-based music streaming application built with React, Vite, and Material-UI
+---
+
+# Welcome to Beat App
+
+Beat App is a modern, responsive web-based music player that delivers a premium streaming experience. Built with React 18 and Vite, it allows users to search for tracks, artists, and albums, manage playback queues, and stream audio seamlessly with native-feeling controls.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running with Beat App in under 5 minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Detailed installation instructions for all package managers
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore the API services and store architecture
+  </Card>
+  <Card title="Deployment" icon="cloud" href="/deployment/docker">
+    Deploy Beat App with Docker and NGINX
+  </Card>
+</CardGroup>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Music Playback & Streaming" icon="play">
+    Stream audio tracks fetched via a custom API with seamless playback controls
+  </Card>
+  <Card title="Advanced Search" icon="magnifying-glass">
+    Dedicated search interfaces for tracks, albums, artists, and playlists
+  </Card>
+  <Card title="Queue Management" icon="list">
+    Add songs to queue, play next, play previous, and manage persistent queue drawer
+  </Card>
+  <Card title="Media Session API" icon="mobile">
+    Control playback from your OS or browser's built-in media controls
+  </Card>
+  <Card title="Premium UI Design" icon="palette">
+    Beautiful, responsive interface built with Material-UI and Emotion
+  </Card>
+  <Card title="Dark Mode Support" icon="moon">
+    Full light/dark theme support with custom color schemes
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+Beat App is built with modern web technologies for optimal performance and developer experience:
+
+- **Frontend Framework**: React 18 with Vite for lightning-fast development
+- **Routing**: React Router DOM for seamless navigation
+- **UI Library**: Material-UI (MUI) with custom theming and Emotion for styling
+- **State Management**: Nanostores for efficient, reactive state management
+- **API Integration**: Axios and Fetch API for YouTube music streaming
+- **Deployment**: Docker, Docker Compose, and NGINX for production
+
+<Note>
+  Beat App integrates with a YouTube Music API backend to provide access to millions of tracks, albums, and artists.
+</Note>
+
+## Architecture Overview
+
+The application follows a modular architecture:
+
+```text
+beat-app/
+├── src/
+│   ├── components/     # Reusable UI components (Player, TrackList, Search)
+│   ├── pages/          # Route pages (Home, Album, Artist, Search)
+│   ├── services/       # API communication layer (youtube-api.js)
+│   ├── stores/         # Global state management (playerStore, searchStore)
+│   ├── layouts/        # Page layout wrappers
+│   └── App.jsx         # Root application component
+├── public/             # Static assets
+└── Dockerfile          # Production deployment config
+```
+
+## What Makes Beat App Special
+
+<Steps>
+  <Step title="Native Media Controls">
+    Integrates with the browser's Media Session API, allowing users to control playback from OS-level media controls, keyboard shortcuts, and lock screens.
+  </Step>
+  
+  <Step title="Reactive State Management">
+    Uses Nanostores for lightweight, atomic state management that keeps the UI in sync with player state across all components.
+  </Step>
+  
+  <Step title="Premium Design System">
+    Custom Material-UI theme with gradient effects, rounded corners, and a carefully crafted dark mode for a premium music streaming experience.
+  </Step>
+  
+  <Step title="Efficient Audio Streaming">
+    Streams audio through a proxy server with automatic URL extraction and playback queue management.
+  </Step>
+</Steps>
+
+## Quick Example
+
+Here's how the player store manages audio playback:
+
+```javascript
+import { playerStore, playerActions } from './stores/playerStore';
+import { useStore } from '@nanostores/react';
+
+function MusicPlayer() {
+  const { currentTrack, isPlaying, queue } = useStore(playerStore);
+
+  const handlePlayTrack = async (track) => {
+    await playerActions.playTrack(track, [track]);
+  };
+
+  return (
+    <div>
+      <h2>{currentTrack?.title}</h2>
+      <button onClick={playerActions.togglePause}>
+        {isPlaying ? 'Pause' : 'Play'}
+      </button>
+      <p>Queue: {queue.length} tracks</p>
+    </div>
+  );
+}
+```
+
+<Info>
+  The player store automatically handles Media Session metadata, audio element events, and queue management.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/quickstart">
+    Follow our quickstart guide to start streaming music in minutes
+  </Card>
+  <Card title="Learn the Architecture" icon="diagram-project" href="/architecture/overview">
+    Understand how Beat App's components and stores work together
+  </Card>
+</CardGroup>

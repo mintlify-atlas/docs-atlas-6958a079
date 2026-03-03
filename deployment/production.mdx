@@ -1,0 +1,557 @@
+---
+title: Production Deployment
+description: Best practices and checklist for deploying Beat App to production
+---
+
+This guide covers best practices and recommendations for deploying Beat App to production environments.
+
+## Pre-Deployment Checklist
+
+Before deploying to production, ensure you've completed the following:
+
+<Steps>
+  <Step title="Environment Configuration">
+    - [ ] Create production `.env` file with valid API URLs
+    - [ ] Set production YouTube API token
+    - [ ] Verify API endpoints are accessible from production
+    - [ ] Remove or replace development/localhost URLs
+  </Step>
+
+  <Step title="Build Verification">
+    - [ ] Test production build locally: `npm run build && npm run preview`
+    - [ ] Verify all routes work correctly
+    - [ ] Test audio playback functionality
+    - [ ] Check browser console for errors
+    - [ ] Validate API connections
+  </Step>
+
+  <Step title="Docker Configuration">
+    - [ ] Review `Dockerfile` for optimization opportunities
+    - [ ] Ensure `.dockerignore` excludes unnecessary files
+    - [ ] Test Docker image builds successfully
+    - [ ] Verify container starts without errors
+    - [ ] Check NGINX configuration for your use case
+  </Step>
+
+  <Step title="Security Review">
+    - [ ] No secrets or private keys in environment variables
+    - [ ] API tokens are scoped for frontend use only
+    - [ ] CORS configured correctly on backend API
+    - [ ] HTTPS enabled (via reverse proxy or load balancer)
+    - [ ] Security headers configured in NGINX
+  </Step>
+
+  <Step title="Performance Optimization">
+    - [ ] Enable Gzip compression (included in NGINX config)
+    - [ ] Verify static asset caching (1-year default)
+    - [ ] Test application loading speed
+    - [ ] Optimize image assets if needed
+    - [ ] Consider CDN for static assets
+  </Step>
+</Steps>
+
+## Deployment Architecture
+
+Beat App is a static frontend application that requires:
+
+1. **Web Server**: NGINX (included in Docker image)
+2. **Backend API**: Separate service for music data (configured via `VITE_API_URL`)
+3. **YouTube API**: Valid API token for music streaming
+
+```
+┌─────────────┐
+│   Browser   │
+└──────┬──────┘
+       │ HTTPS
+       ▼
+┌─────────────────┐
+│  Reverse Proxy  │
+│  (Optional)     │
+└────────┬────────┘
+         │
+         ▼
+┌──────────────────┐      ┌──────────────┐
+│   Beat App       │─────▶│  Backend API │
+│   (NGINX)        │ HTTP │              │
+│   Port 3000      │      └──────────────┘
+└──────────────────┘
+         │
+         │ HTTPS
+         ▼
+┌──────────────────┐
+│  YouTube API     │
+└──────────────────┘
+```
+
+## Production Deployment Methods
+
+### Docker Compose (Recommended)
+
+The simplest production deployment method:
+
+<CodeGroup>
+```bash Deploy
+# Set production environment variables
+cat > .env << EOF
+VITE_API_URL=https://api.beatapp.com
+VITE_YOUTUBE_API_TOKEN=your_production_token
+EOF
+
+# Build and deploy
+docker-compose up -d --build
+
+# Verify it's running
+docker-compose ps
+docker-compose logs -f
+```
+
+```bash Update
+# Pull latest code
+git pull origin main
+
+# Rebuild and redeploy
+docker-compose down
+docker-compose up -d --build
+
+# Verify
+docker-compose logs --tail=50
+```
+</CodeGroup>
+
+### Docker Swarm
+
+For orchestrated deployments across multiple nodes:
+
+```bash
+# Initialize swarm (if not already done)
+docker swarm init
+
+# Deploy stack
+docker stack deploy -c docker-compose.yml beat-app
+
+# Check services
+docker service ls
+docker service logs beat-app_beat-app
+```
+
+### Kubernetes
+
+For Kubernetes deployments, create deployment and service manifests:
+
+<CodeGroup>
+```yaml deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beat-app
+  labels:
+    app: beat-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: beat-app
+  template:
+    metadata:
+      labels:
+        app: beat-app
+    spec:
+      containers:
+      - name: beat-app
+        image: your-registry/beat-app:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: VITE_API_URL
+          value: "https://api.beatapp.com"
+        - name: VITE_YOUTUBE_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: beat-app-secrets
+              key: youtube-token
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+```
+
+```yaml service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: beat-app
+spec:
+  selector:
+    app: beat-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
+  type: LoadBalancer
+```
+</CodeGroup>
+
+<Note>
+  Remember to rebuild the image when environment variables change, as they are embedded at build time.
+</Note>
+
+## NGINX Production Configuration
+
+The included `nginx.conf` is production-ready with optimizations:
+
+```nginx
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    # Cache static assets for 1 year
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA fallback
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+### Additional Security Headers
+
+For enhanced security, consider adding these headers:
+
+```nginx
+# Add inside server block
+add_header X-Frame-Options "SAMEORIGIN" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-XSS-Protection "1; mode=block" always;
+add_header Referrer-Policy "no-referrer-when-downgrade" always;
+add_header Content-Security-Policy "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';" always;
+```
+
+<Warning>
+  Content Security Policy may need adjustment based on your API endpoints and external resources. Test thoroughly before deploying.
+</Warning>
+
+## HTTPS/SSL Setup
+
+The Docker container serves HTTP on port 3000. For HTTPS in production:
+
+### Option 1: Reverse Proxy (Recommended)
+
+Use a reverse proxy like Traefik, Nginx, or Caddy:
+
+```nginx
+# Nginx reverse proxy example
+server {
+    listen 443 ssl http2;
+    server_name beatapp.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Option 2: Let's Encrypt with Certbot
+
+Automatically obtain and renew SSL certificates:
+
+```bash
+# Install certbot
+sudo apt-get update
+sudo apt-get install certbot
+
+# Obtain certificate
+sudo certbot certonly --standalone -d beatapp.com
+
+# Configure nginx to use the certificate
+```
+
+### Option 3: Cloud Load Balancer
+
+Most cloud providers offer load balancers with SSL termination:
+
+- AWS: Application Load Balancer with ACM certificate
+- Google Cloud: HTTPS Load Balancer with managed certificate
+- Azure: Application Gateway with SSL certificate
+
+## Monitoring and Logging
+
+### Container Logs
+
+Access NGINX and application logs:
+
+```bash
+# Follow logs in real-time
+docker-compose logs -f
+
+# View specific service
+docker-compose logs beat-app
+
+# Last 100 lines
+docker-compose logs --tail=100 beat-app
+```
+
+### Health Checks
+
+Add health checks to your Docker Compose configuration:
+
+```yaml
+services:
+  beat-app:
+    # ... existing config
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+```
+
+### Monitoring Tools
+
+Consider integrating:
+
+- **Prometheus**: Metrics collection
+- **Grafana**: Visualization and dashboards
+- **ELK Stack**: Log aggregation and analysis
+- **Sentry**: Error tracking and monitoring
+
+## Performance Optimization
+
+### Built-in Optimizations
+
+The Docker setup includes several performance optimizations:
+
+- Multi-stage build reduces image size
+- Gzip compression enabled by default
+- Static asset caching (1-year expiration)
+- Lightweight Alpine Linux base images
+
+### Additional Optimizations
+
+<CodeGroup>
+```nginx CDN Integration
+# Serve static assets from CDN
+location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    # Redirect to CDN
+    return 301 https://cdn.beatapp.com$uri;
+}
+```
+
+```yaml Resource Limits
+# In docker-compose.yml
+services:
+  beat-app:
+    # ... existing config
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+```
+</CodeGroup>
+
+## Scaling
+
+### Horizontal Scaling
+
+Scale Beat App across multiple containers:
+
+```bash
+# Docker Compose
+docker-compose up -d --scale beat-app=3
+
+# Add a load balancer in front (nginx, HAProxy, etc.)
+```
+
+### Load Balancing
+
+Example Nginx load balancer configuration:
+
+```nginx
+upstream beat_app {
+    least_conn;
+    server beat-app-1:3000;
+    server beat-app-2:3000;
+    server beat-app-3:3000;
+}
+
+server {
+    listen 80;
+    location / {
+        proxy_pass http://beat_app;
+    }
+}
+```
+
+## Backup and Disaster Recovery
+
+Since Beat App is a static frontend:
+
+1. **Source Code**: Keep in version control (Git)
+2. **Docker Images**: Push to container registry
+3. **Environment Config**: Document and backup `.env` files securely
+4. **Deployment Scripts**: Version control deployment configurations
+
+```bash
+# Tag and push Docker image
+docker tag beat-app:latest your-registry/beat-app:v1.0.0
+docker push your-registry/beat-app:v1.0.0
+
+# Backup deployment config
+tar -czf beat-app-config-$(date +%Y%m%d).tar.gz \
+  docker-compose.yml \
+  nginx.conf \
+  .env.example
+```
+
+## Troubleshooting Production Issues
+
+### Application won't start
+
+```bash
+# Check container status
+docker-compose ps
+
+# View logs
+docker-compose logs beat-app
+
+# Verify environment variables
+docker-compose config
+```
+
+### High memory usage
+
+```bash
+# Check resource usage
+docker stats
+
+# Set memory limits in docker-compose.yml
+mem_limit: 512m
+```
+
+### Slow response times
+
+1. Check network latency to backend API
+2. Verify Gzip compression is working
+3. Confirm static asset caching headers
+4. Review NGINX access logs for slow requests
+
+```bash
+# Access NGINX logs inside container
+docker exec beat-app tail -f /var/log/nginx/access.log
+```
+
+## Rollback Strategy
+
+Quick rollback in case of issues:
+
+```bash
+# Using tagged images
+docker pull your-registry/beat-app:v1.0.0  # previous version
+docker tag your-registry/beat-app:v1.0.0 beat-app:latest
+docker-compose up -d
+
+# Using git
+git checkout v1.0.0
+docker-compose down
+docker-compose up -d --build
+```
+
+<Note>
+  Always test updates in a staging environment before deploying to production.
+</Note>
+
+## Cloud Platform Specific Guides
+
+### AWS ECS
+
+1. Build and push image to Amazon ECR
+2. Create ECS task definition with environment variables
+3. Deploy to ECS service with Application Load Balancer
+4. Configure CloudWatch for logging
+
+### Google Cloud Run
+
+```bash
+# Build and deploy
+gcloud builds submit --tag gcr.io/PROJECT_ID/beat-app
+gcloud run deploy beat-app \
+  --image gcr.io/PROJECT_ID/beat-app \
+  --platform managed \
+  --port 3000 \
+  --set-env-vars VITE_API_URL=https://api.beatapp.com
+```
+
+### Azure Container Instances
+
+```bash
+# Deploy to Azure
+az container create \
+  --resource-group beat-app-rg \
+  --name beat-app \
+  --image your-registry/beat-app:latest \
+  --ports 3000 \
+  --dns-name-label beat-app \
+  --environment-variables \
+    VITE_API_URL=https://api.beatapp.com
+```
+
+### DigitalOcean App Platform
+
+1. Connect GitHub repository
+2. Configure build command: `docker build`
+3. Set environment variables in dashboard
+4. Deploy with automatic HTTPS
+
+## Support and Maintenance
+
+### Regular Maintenance Tasks
+
+- Monitor disk space usage
+- Review and rotate logs
+- Update base images (node:22-alpine, nginx:stable-alpine)
+- Rotate API tokens periodically
+- Monitor for security vulnerabilities
+
+### Updates and Upgrades
+
+```bash
+# Update application code
+git pull origin main
+
+# Rebuild with latest dependencies
+docker-compose build --no-cache
+
+# Deploy update
+docker-compose up -d
+
+# Verify deployment
+curl http://localhost:3000
+```
+
+<Warning>
+  Always backup before performing updates and have a rollback plan ready.
+</Warning>

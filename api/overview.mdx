@@ -1,0 +1,217 @@
+---
+title: 'API Architecture Overview'
+description: 'Backend services architecture for Beat App music streaming platform'
+---
+
+## Introduction
+
+Beat App's backend architecture consists of two primary API services that handle music data retrieval and streaming functionality. The services are built on top of YouTube Music's infrastructure, providing a comprehensive music streaming experience.
+
+## Base Configuration
+
+All API endpoints are configured through environment variables and use a centralized base URL:
+
+```javascript src/constants.js
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const YOUTUBE_API = `${API_URL}/api/youtube`;
+const STREAM_API = `${API_URL}/api/stream`;
+const PROXY_URL = `${STREAM_API}/proxy?url=`;
+```
+
+<ParamField path="VITE_API_URL" type="string" default="http://localhost:3000">
+  Base URL for all API services. Configure via environment variable.
+</ParamField>
+
+## API Services
+
+### YouTube API Service
+
+**Base URL**: `${API_URL}/api/youtube`
+
+Handles all music metadata operations including:
+- Search functionality (tracks, albums, artists, playlists)
+- Content retrieval (albums, artists, playlists)
+- Discovery features (home feed, explore, charts, new releases)
+- Search suggestions and autocomplete
+
+[View YouTube API Documentation](/api/youtube-api)
+
+### Stream API Service
+
+**Base URL**: `${API_URL}/api/stream`
+
+Handles media streaming operations including:
+- Audio stream proxying
+- Media URL resolution
+- Stream delivery optimization
+
+[View Stream API Documentation](/api/stream-api)
+
+## Authentication
+
+All API requests require Bearer token authentication. The token is configured through environment variables:
+
+```javascript
+const HEADERS = { 
+  Authorization: `Bearer ${import.meta.env.VITE_YOUTUBE_API_TOKEN}` 
+};
+```
+
+<ParamField path="VITE_YOUTUBE_API_TOKEN" type="string" required>
+  API authentication token for YouTube Music API access
+</ParamField>
+
+## Response Patterns
+
+### Standard Response Structure
+
+Most API endpoints return data in a consistent wrapper format:
+
+```json
+{
+  "data": {
+    "items": [...],
+    "continuation": "token_for_pagination"
+  }
+}
+```
+
+### Pagination
+
+Many endpoints support continuation-based pagination:
+
+1. Initial request returns `continuation` token in response
+2. Subsequent requests use `/continuation` endpoint with token parameter
+3. Empty continuation indicates end of results
+
+<CodeGroup>
+```javascript Initial Request
+const res = await axios.get(`${YOUTUBE_API}/search`, {
+  params: { q: 'query', filter: 'SONG' },
+  headers: HEADERS
+});
+const { items, continuation } = res.data.data;
+```
+
+```javascript Continuation Request
+const res = await axios.get(`${YOUTUBE_API}/search/continuation`, {
+  params: { token: continuation },
+  headers: HEADERS
+});
+```
+</CodeGroup>
+
+### Error Handling
+
+All service functions implement graceful error handling:
+
+- Failed requests return empty arrays or objects
+- No exceptions thrown to client code
+- Errors logged to console in development
+
+```javascript
+try {
+  const res = await axios.get(endpoint, { headers: HEADERS });
+  return res.data.data || [];
+} catch (e) {
+  console.error('API error:', e);
+  return [];
+}
+```
+
+## Data Models
+
+The API implements several data transformation mappers to normalize YouTube Music responses:
+
+<Expandable title="Track Object">
+  <ResponseField name="trackId" type="string" required>
+    Unique video/track identifier
+  </ResponseField>
+  <ResponseField name="title" type="string" required>
+    Track title
+  </ResponseField>
+  <ResponseField name="artists" type="array" required>
+    Array of artist objects
+  </ResponseField>
+  <ResponseField name="album" type="object">
+    Album information with title and albumId
+  </ResponseField>
+  <ResponseField name="thumbnailUrl" type="string">
+    Track artwork URL
+  </ResponseField>
+  <ResponseField name="duration" type="object">
+    Duration object with label property (e.g., "3:45")
+  </ResponseField>
+  <ResponseField name="isExplicit" type="boolean" default={false}>
+    Explicit content flag
+  </ResponseField>
+</Expandable>
+
+<Expandable title="Album Object">
+  <ResponseField name="albumId" type="string" required>
+    Unique album browse identifier
+  </ResponseField>
+  <ResponseField name="title" type="string" required>
+    Album title
+  </ResponseField>
+  <ResponseField name="year" type="string">
+    Release year
+  </ResponseField>
+  <ResponseField name="artist" type="object" required>
+    Primary artist object
+  </ResponseField>
+  <ResponseField name="thumbnailUrl" type="string">
+    Album artwork URL
+  </ResponseField>
+  <ResponseField name="isExplicit" type="boolean" default={false}>
+    Explicit content flag
+  </ResponseField>
+</Expandable>
+
+<Expandable title="Artist Object">
+  <ResponseField name="artistId" type="string" required>
+    Unique artist browse identifier
+  </ResponseField>
+  <ResponseField name="name" type="string" required>
+    Artist name
+  </ResponseField>
+  <ResponseField name="subscribers" type="string">
+    Subscriber count text
+  </ResponseField>
+  <ResponseField name="thumbnailUrl" type="string">
+    Artist image URL
+  </ResponseField>
+</Expandable>
+
+<Expandable title="Playlist Object">
+  <ResponseField name="playlistId" type="string" required>
+    Unique playlist browse identifier
+  </ResponseField>
+  <ResponseField name="title" type="string" required>
+    Playlist title
+  </ResponseField>
+  <ResponseField name="itemCount" type="string">
+    Song count as text
+  </ResponseField>
+  <ResponseField name="author" type="array">
+    Playlist creator(s)
+  </ResponseField>
+  <ResponseField name="thumbnailUrl" type="string">
+    Playlist artwork URL
+  </ResponseField>
+</Expandable>
+
+## Rate Limiting
+
+API rate limits are enforced by the upstream YouTube Music API. Implement appropriate request throttling in your application to avoid service disruption.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="YouTube API" icon="magnifying-glass" href="/api/youtube-api">
+    Explore search and metadata endpoints
+  </Card>
+  <Card title="Stream API" icon="play" href="/api/stream-api">
+    Learn about audio streaming
+  </Card>
+</CardGroup>

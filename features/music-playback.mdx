@@ -1,0 +1,241 @@
+---
+title: Music Playback
+description: Control music playback with play, pause, skip, volume controls, and real-time progress tracking
+---
+
+## Overview
+
+Beat App provides a full-featured music player with intuitive controls for managing your listening experience. The player bar is always accessible at the bottom of the app, giving you instant control over your music.
+
+## Player Controls
+
+The player component (`src/components/Player.jsx:23`) provides comprehensive playback controls:
+
+<Steps>
+  <Step title="Play/Pause">
+    Click the center play button to start or pause playback. The button shows a loading indicator while tracks are buffering.
+    
+    ```jsx
+    <IconButton
+      className="play-btn-gradient"
+      aria-label={isPlaying ? "pause" : "play"}
+      onClick={playerActions.togglePause}
+    >
+      {isLoading ? (
+        <CircularProgress size={24} />
+      ) : isPlaying ? (
+        <PauseRounded />
+      ) : (
+        <PlayArrowRounded />
+      )}
+    </IconButton>
+    ```
+  </Step>
+
+  <Step title="Skip Tracks">
+    Use the previous and next buttons to navigate through your queue:
+    
+    ```jsx
+    <IconButton onClick={playerActions.playPrevious}>
+      <SkipPreviousRounded />
+    </IconButton>
+    <IconButton onClick={playerActions.playNext}>
+      <SkipNextRounded />
+    </IconButton>
+    ```
+  </Step>
+
+  <Step title="Seek Through Track">
+    Drag the progress slider to jump to any position in the current track:
+    
+    ```jsx
+    <Slider
+      value={parseInt(currentTime * 5)}
+      max={parseInt(duration * 5)}
+      onChange={(_, value) => playerActions.seekTo(value / 5)}
+    />
+    ```
+  </Step>
+</Steps>
+
+## Volume Control
+
+Adjust playback volume using the volume slider on the right side of the player bar:
+
+```jsx
+// Volume is synchronized with the audio element
+useEffect(() => {
+  audioEl.volume = volume / 100;
+}, [volume]);
+
+// Mute/unmute functionality
+useEffect(() => {
+  audioEl.muted = muted;
+}, [muted]);
+```
+
+<Info>
+Volume settings persist during your session. The mute button provides quick audio toggling without losing your volume level.
+</Info>
+
+## Track Information
+
+The player displays current track information including:
+
+- Album artwork thumbnail
+- Track title
+- Artist name
+- Like/unlike button
+- Current playback time
+- Total track duration
+
+```jsx
+<div className="track-info">
+  <Box sx={{ width: 56, height: 56 }}>
+    <img src={`${PROXY_URL}${currentTrack.thumbnailUrl}`} />
+  </Box>
+  <Box>
+    <p>{currentTrack?.title ?? ""}</p>
+    <p>{currentTrack?.artists[0]?.name ?? ""}</p>
+  </Box>
+  <IconButton onClick={handleToggleLike}>
+    {liked ? <FavoriteRounded /> : <FavoriteBorderRounded />}
+  </IconButton>
+</div>
+```
+
+## Player State Management
+
+The player uses a centralized store (`src/stores/playerStore.js:33`) to manage playback state:
+
+```javascript
+const initialState = {
+  isPlaying: false,
+  currentTrackIndex: -1,
+  currentTrack: null,
+  queue: [],
+  isLoading: false,
+  currentTime: 0,
+  duration: 0,
+  isQueueOpen: false,
+};
+```
+
+### Playing a Track
+
+Tracks are played using the `playTrack` action which handles:
+
+1. Setting the current track
+2. Updating the queue (if provided)
+3. Fetching the audio stream URL
+4. Loading and playing the audio
+
+```javascript
+playTrack: async (track, newQueue = null) => {
+  playerStore.setKey("currentTrack", track);
+  playerStore.setKey("isLoading", true);
+
+  if (newQueue) {
+    playerStore.setKey("queue", newQueue);
+  }
+
+  const audioUrl = await getAudioUrl(track.trackId);
+  audioEl.src = audioUrl;
+  audioEl.play();
+}
+```
+
+## Audio Event Handling
+
+The player automatically responds to audio events:
+
+<Tabs>
+  <Tab title="Play/Pause">
+    ```javascript
+    audioEl.onplay = () => {
+      playerStore.setKey("isPlaying", true);
+    };
+
+    audioEl.onpause = () => {
+      playerStore.setKey("isPlaying", false);
+    };
+    ```
+  </Tab>
+
+  <Tab title="Loading States">
+    ```javascript
+    audioEl.onplaying = () => {
+      playerStore.setKey("isLoading", false);
+    };
+
+    audioEl.onwaiting = () => {
+      playerStore.setKey("isLoading", true);
+    };
+    ```
+  </Tab>
+
+  <Tab title="Track Ended">
+    ```javascript
+    audioEl.onended = () => {
+      playerActions.playNext();
+    };
+    ```
+  </Tab>
+
+  <Tab title="Time Updates">
+    ```javascript
+    audioEl.onloadedmetadata = () => {
+      playerStore.setKey("duration", audioEl.duration);
+    };
+
+    audioEl.ontimeupdate = () => {
+      playerStore.setKey("currentTime", audioEl.currentTime);
+    };
+    ```
+  </Tab>
+</Tabs>
+
+## Recent Plays Tracking
+
+Every track you play is automatically saved to your recent plays history:
+
+```jsx
+// Automatically track when track changes
+useEffect(() => {
+  if (currentTrack?.trackId) {
+    addRecentPlay(currentTrack).catch(() => {});
+  }
+}, [currentTrack?.trackId]);
+```
+
+<Note>
+Recent plays are stored locally using IndexedDB and are available in your Library page under "Recently Played".
+</Note>
+
+## Time Display
+
+Track duration and current position are formatted for readability:
+
+```javascript
+const secondsToTime = (seconds) => {
+  const totalSeconds = Math.floor(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+  return `${minutes}:${secs.toString().padStart(2, "0")}`;
+};
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Queue Management" icon="list" href="/features/queue-management">
+    Learn how to manage your playback queue
+  </Card>
+  <Card title="Media Controls" icon="mobile" href="/features/media-controls">
+    Control playback from your device's media controls
+  </Card>
+</CardGroup>
