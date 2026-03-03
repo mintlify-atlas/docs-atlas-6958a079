@@ -1,0 +1,97 @@
+{
+  "projectType": "saas",
+  "projectName": "Beat App",
+  "projectDescription": "A modern, responsive web-based music streaming application built with React and Vite",
+  "theme": "palm",
+  "primaryColor": "#8B5CF6",
+  "lightColor": "#A78BFA",
+  "darkColor": "#6D28D9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/music-playback",
+              "features/search",
+              "features/queue-management",
+              "features/media-controls",
+              "features/library"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/state-management",
+              "architecture/components"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "pages": [
+              "deployment/docker",
+              "deployment/environment-variables",
+              "deployment/production"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Backend Services",
+            "pages": [
+              "api/overview",
+              "api/youtube-api",
+              "api/stream-api"
+            ]
+          },
+          {
+            "group": "State Management",
+            "pages": [
+              "api/player-store",
+              "api/search-store",
+              "api/app-store"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Music playback and streaming",
+    "Search for tracks, albums, and artists",
+    "Queue management with play next/previous",
+    "Media Session API integration",
+    "Responsive Material-UI design",
+    "State management with Nanostores",
+    "Docker deployment support"
+  ],
+  "publicApiSurface": [
+    "playerStore",
+    "playerActions.playTrack()",
+    "playerActions.togglePause()",
+    "playerActions.playNext()",
+    "playerActions.playPrevious()",
+    "playerActions.addToQueue()",
+    "playerActions.seekTo()",
+    "searchTracks()",
+    "searchAlbums()",
+    "searchArtists()",
+    "getAlbum()",
+    "getArtist()",
+    "getPlaylistTracks()"
+  ]
+}
